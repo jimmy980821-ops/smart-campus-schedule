@@ -1,0 +1,30 @@
+name: Send class reminders
+
+on:
+  schedule:
+    # 臺灣時間週一至週五 08:00–14:59，每五分鐘檢查一次。
+    - cron: "*/5 0-6 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      send_test:
+        description: "忽略課表時間並發送測試通知"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Send scheduled notification
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SEND_TEST: ${{ inputs.send_test || 'false' }}
+        run: node scripts/send-class-reminders.mjs

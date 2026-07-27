@@ -2,10 +2,14 @@
   "name": "校園日程 Campus Flow",
   "short_name": "校園日程",
   "description": "智慧校園課表、作業與考試管理系統",
+  "id": "./",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#f4f7fb",
   "theme_color": "#315fbc",
+  "orientation": "portrait-primary",
+  "categories": ["education", "productivity"],
   "icons": [
     {
       "src": "app-icon.png",

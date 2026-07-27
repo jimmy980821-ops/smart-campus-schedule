@@ -16,6 +16,12 @@ import {
   setDoc,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+import {
+  getMessaging,
+  getToken,
+  isSupported as isMessagingSupported,
+  onMessage
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-messaging.js";
 
 // Firebase 公開的網站設定。這些識別資料不是密碼；資料安全由 Firestore 規則控管。
 const firebaseConfig = {
@@ -32,6 +38,7 @@ const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const database = getFirestore(firebaseApp);
 const googleProvider = new GoogleAuthProvider();
+const VAPID_PUBLIC_KEY = "BHsz6TlMHrDVkDiNPBdvKYnJtKldrAukA_L37eyoyjO2k_Adr8Mxu3YWAI5L5h8oJVWHHgWXINkld01D5l1r9SU";
 
 /* =========================================================
    課表資料集中區：日後只要修改此區即可調整時間與課程
@@ -120,6 +127,8 @@ let toastTimer = null;
 let notifiedCourseKey = "";
 let currentUser = null;
 let cloudUnsubscribers = [];
+let messaging = null;
+let serviceWorkerRegistration = null;
 
 const elements = {
   todayDate: document.querySelector("#today-date"),
@@ -161,6 +170,7 @@ function init() {
   updateLiveCourseState();
   bindEvents();
   setDefaultFormDates();
+  initializePwa();
   initializeCloudSync();
   notificationTimer = window.setInterval(updateLiveCourseState, 30000);
 }
@@ -170,7 +180,7 @@ function bindEvents() {
   document.querySelector("#add-exam-button").addEventListener("click", () => openExamModal());
   elements.assignmentForm.addEventListener("submit", saveAssignment);
   elements.examForm.addEventListener("submit", saveExam);
-  elements.notificationButton.addEventListener("click", requestNotificationPermission);
+  elements.notificationButton.addEventListener("click", enableBackgroundNotifications);
   elements.authButton.addEventListener("click", handleAuthButton);
   elements.menuButton.addEventListener("click", toggleMenu);
 
@@ -214,6 +224,7 @@ function initializeCloudSync() {
     try {
       await migrateLocalDataToCloud(user.uid);
       startCloudListeners(user.uid);
+      refreshExistingPushToken();
     } catch (error) {
       handleCloudError(error);
     }
@@ -224,6 +235,7 @@ async function handleAuthButton() {
   elements.authButton.disabled = true;
   try {
     if (currentUser) {
+      await removeCurrentPushDevice();
       await signOut(auth);
       showToast("已登出，改用本機資料");
     } else {
@@ -336,6 +348,153 @@ async function deleteCloudRecord(collectionName, id) {
 function handleCloudError(error) {
   setSyncStatus("雲端同步暫時失敗，資料仍保存在本機");
   console.error("Firebase sync failed:", error);
+}
+
+/* ====================== PWA 與 Firebase 背景推播 ====================== */
+
+async function initializePwa() {
+  if (!("serviceWorker" in navigator)) {
+    elements.notificationMessage.textContent = "此瀏覽器不支援背景通知，仍可使用網站內提醒。";
+    return;
+  }
+
+  try {
+    serviceWorkerRegistration = await navigator.serviceWorker.register("./firebase-messaging-sw.js", {
+      scope: "./"
+    });
+
+    if (await isMessagingSupported()) {
+      messaging = getMessaging(firebaseApp);
+      onMessage(messaging, showForegroundPushMessage);
+      refreshExistingPushToken();
+    }
+  } catch (error) {
+    elements.notificationMessage.textContent = "背景服務暫時無法啟動，請重新整理後再試。";
+    console.error("PWA initialization failed:", error);
+  }
+}
+
+async function enableBackgroundNotifications() {
+  if (!window.isSecureContext || !("Notification" in window) || !("serviceWorker" in navigator)) {
+    elements.notificationMessage.textContent = "此瀏覽器不支援背景通知，請使用 HTTPS 網址開啟。";
+    return;
+  }
+
+  if (isIosDevice() && !isStandalonePwa()) {
+    elements.notificationMessage.textContent = "iPhone 請先點 Safari 分享按鈕 →「加入主畫面」，再從主畫面開啟校園日程。";
+    showToast("請先加入 iPhone 主畫面");
+    return;
+  }
+
+  if (!currentUser) {
+    elements.notificationMessage.textContent = "請先使用 Google 帳號登入，再開啟背景通知。";
+    showToast("請先登入 Google 帳號");
+    return;
+  }
+
+  elements.notificationButton.disabled = true;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      elements.notificationMessage.textContent = permission === "denied"
+        ? "通知已被封鎖，請到裝置的通知設定中重新允許。"
+        : "尚未允許通知，網站內提醒仍可正常使用。";
+      return;
+    }
+
+    const token = await registerPushDevice();
+    if (!token) throw new Error("FCM did not return a registration token.");
+
+    elements.notificationButton.textContent = "背景通知已開啟";
+    elements.notificationMessage.textContent = "設定完成；關閉網站後仍可在上課前收到通知。";
+    showToast("背景通知已開啟");
+  } catch (error) {
+    elements.notificationMessage.textContent = "背景通知設定失敗，請確認 Firebase Cloud Messaging 已啟用。";
+    console.error("Push notification setup failed:", error);
+  } finally {
+    elements.notificationButton.disabled = false;
+  }
+}
+
+async function registerPushDevice() {
+  if (!messaging || !currentUser) return "";
+  serviceWorkerRegistration ||= await navigator.serviceWorker.ready;
+
+  const token = await getToken(messaging, {
+    vapidKey: VAPID_PUBLIC_KEY,
+    serviceWorkerRegistration
+  });
+  if (!token) return "";
+
+  const deviceId = await hashText(token);
+  await setDoc(doc(database, "pushDevices", deviceId), {
+    uid: currentUser.uid,
+    token,
+    platform: getDeviceLabel(),
+    updatedAt: Date.now()
+  });
+  localStorage.setItem("campusFlowPushDeviceId", deviceId);
+  return token;
+}
+
+async function refreshExistingPushToken() {
+  if (!("Notification" in window) || Notification.permission !== "granted" || !messaging || !currentUser) return;
+  try {
+    const token = await registerPushDevice();
+    if (token) {
+      elements.notificationButton.textContent = "背景通知已開啟";
+      elements.notificationMessage.textContent = "此裝置已啟用背景課程提醒。";
+    }
+  } catch (error) {
+    console.warn("Push token refresh failed:", error);
+  }
+}
+
+async function removeCurrentPushDevice() {
+  const deviceId = localStorage.getItem("campusFlowPushDeviceId");
+  if (!deviceId || !currentUser) return;
+  try {
+    await deleteDoc(doc(database, "pushDevices", deviceId));
+    localStorage.removeItem("campusFlowPushDeviceId");
+  } catch (error) {
+    console.warn("Push device removal failed:", error);
+  }
+}
+
+async function showForegroundPushMessage(payload) {
+  const data = payload.data || {};
+  const title = data.title || "校園日程提醒";
+  const options = {
+    body: data.body || "有新的課程提醒。",
+    icon: data.icon || "./app-icon.png",
+    badge: "./app-icon.png",
+    tag: data.tag || "campus-flow-reminder",
+    data: { url: data.url || "./" }
+  };
+
+  if (serviceWorkerRegistration && Notification.permission === "granted") {
+    await serviceWorkerRegistration.showNotification(title, options);
+  }
+}
+
+function isIosDevice() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function isStandalonePwa() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function getDeviceLabel() {
+  if (isIosDevice()) return "iPhone／iPad";
+  if (/Android/i.test(navigator.userAgent)) return "Android";
+  return "電腦瀏覽器";
+}
+
+async function hashText(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function updateLiveCourseState() {
@@ -737,34 +896,6 @@ function createAnalysisCards(items) {
     </article>`).join("");
 }
 
-async function requestNotificationPermission() {
-  if (!("Notification" in window)) {
-    elements.notificationMessage.textContent = "此瀏覽器不支援通知功能，課程提醒仍會顯示在網站內。";
-    return;
-  }
-
-  if (!window.isSecureContext) {
-    elements.notificationMessage.textContent = "瀏覽器通知需透過 HTTPS 或 localhost 開啟；目前仍可使用頁面內提醒。";
-    return;
-  }
-
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission === "granted") {
-      elements.notificationMessage.textContent = "課程通知已開啟，將於上課前 10 分鐘提醒。";
-      showToast("課程通知已開啟");
-      updateLiveCourseState();
-    } else if (permission === "denied") {
-      elements.notificationMessage.textContent = "通知權限已被封鎖，可至瀏覽器網站設定中重新開啟。";
-    } else {
-      elements.notificationMessage.textContent = "尚未開啟通知，課程提醒仍會顯示在網站內。";
-    }
-  } catch (error) {
-    elements.notificationMessage.textContent = "暫時無法開啟通知，請稍後再試。";
-    console.warn("通知權限請求失敗：", error);
-  }
-}
-
 function maybeSendClassNotification(liveState) {
   if (!("Notification" in window) || Notification.permission !== "granted" || !liveState.nextCourse) return;
   if (liveState.minutesUntil < 0 || liveState.minutesUntil > 10) return;
@@ -774,10 +905,18 @@ function maybeSendClassNotification(liveState) {
   if (notifiedCourseKey === key) return;
 
   const time = getPeriodTime(course.period);
-  new Notification(`準備上課：${course.subject}`, {
+  const options = {
     body: `${time.start} 在${course.room}上課，還有 ${liveState.minutesUntil} 分鐘。`,
-    tag: key
-  });
+    icon: "./app-icon.png",
+    badge: "./app-icon.png",
+    tag: key,
+    data: { url: "./" }
+  };
+  if (serviceWorkerRegistration) {
+    serviceWorkerRegistration.showNotification(`準備上課：${course.subject}`, options);
+  } else {
+    new Notification(`準備上課：${course.subject}`, options);
+  }
   notifiedCourseKey = key;
 }
 
