@@ -40,7 +40,7 @@
           <a href="#schedule">每週課表</a>
           <a href="#assignments">作業管理</a>
           <a href="#exams">考試倒數</a>
-          <a href="#free-periods">空堂分析</a>
+          <a href="#learning-overview">學習總覽</a>
         </div>
         <div class="header-actions">
           <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切換為黑夜模式" aria-pressed="false">
@@ -95,6 +95,22 @@
               <div class="today-course-list" id="today-course-list" aria-live="polite"></div>
             </article>
           </div>
+
+          <article class="gsat-home-card" id="gsat-home-card" aria-live="polite">
+            <div class="gsat-home-heading">
+              <p class="section-kicker">GSAT COUNTDOWN</p>
+              <h2 id="gsat-home-title">學測倒數</h2>
+              <p id="gsat-home-date">正在確認學測日期…</p>
+            </div>
+            <div class="gsat-home-count">
+              <strong id="gsat-home-days">—</strong>
+              <span id="gsat-home-unit">天</span>
+            </div>
+            <div class="gsat-home-action">
+              <p id="gsat-home-message">每天前進一點，累積成考場上的底氣。</p>
+              <button class="button button-light" id="gsat-manage-button" type="button">設定學測日期</button>
+            </div>
+          </article>
 
           <aside class="reminder-bar" id="course-reminder" aria-live="polite">
             <span class="reminder-icon" aria-hidden="true">!</span>
@@ -168,16 +184,16 @@
         </div>
       </section>
 
-      <section class="section muted-section" id="free-periods" aria-labelledby="free-title">
+      <section class="section muted-section" id="learning-overview" aria-labelledby="learning-overview-title">
         <div class="container">
           <div class="section-heading">
             <div>
-              <p class="section-kicker">SMART STUDY</p>
-              <h2 id="free-title">空堂分析</h2>
-              <p>讓零碎時間成為能完成小任務的專注時段。</p>
+              <p class="section-kicker">STUDY DASHBOARD</p>
+              <h2 id="learning-overview-title">學習總覽</h2>
+              <p>快速掌握待完成作業、七日內期限、最近考試與目前完成進度。</p>
             </div>
           </div>
-          <div class="analysis-grid" id="free-period-analysis" aria-live="polite"></div>
+          <div class="analysis-grid" id="learning-overview-grid" aria-live="polite"></div>
         </div>
       </section>
     </main>

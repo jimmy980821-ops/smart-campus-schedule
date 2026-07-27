@@ -370,6 +370,99 @@ h2 {
   gap: 22px;
 }
 
+.gsat-home-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) auto minmax(220px, 0.8fr);
+  align-items: center;
+  gap: 32px;
+  overflow: hidden;
+  margin-top: 22px;
+  padding: 26px 30px;
+  border: 1px solid #f0c79d;
+  border-radius: var(--radius);
+  background:
+    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.42), transparent 14rem),
+    linear-gradient(135deg, #fff8ed, #f8e4ca);
+  box-shadow: var(--shadow);
+}
+
+.gsat-home-card::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 6px;
+  background: #d06b43;
+  content: "";
+}
+
+.gsat-home-heading,
+.gsat-home-action {
+  position: relative;
+  z-index: 1;
+}
+
+.gsat-home-heading h2 {
+  margin-bottom: 4px;
+}
+
+.gsat-home-heading > p:last-child,
+.gsat-home-action p {
+  margin-bottom: 0;
+  color: #6e5a48;
+}
+
+.gsat-home-count {
+  display: flex;
+  min-width: 150px;
+  align-items: baseline;
+  justify-content: center;
+  gap: 7px;
+  color: #a4492c;
+}
+
+.gsat-home-count strong {
+  font-size: clamp(3.4rem, 8vw, 5.8rem);
+  font-weight: 950;
+  line-height: 0.9;
+  letter-spacing: -0.06em;
+}
+
+.gsat-home-count span {
+  font-size: 1.1rem;
+  font-weight: 900;
+}
+
+.gsat-home-action {
+  display: grid;
+  gap: 13px;
+  justify-items: start;
+}
+
+.gsat-home-card.is-empty .gsat-home-count {
+  color: #a28b75;
+}
+
+.gsat-home-card.is-today {
+  border-color: #db8a72;
+  background: linear-gradient(135deg, #fff3ed, #f4cabb);
+}
+
+html[data-theme="dark"] .gsat-home-card {
+  border-color: #75563d;
+  background:
+    radial-gradient(circle at 80% 20%, rgba(255, 255, 255, 0.04), transparent 14rem),
+    linear-gradient(135deg, #2c241c, #35251f);
+}
+
+html[data-theme="dark"] .gsat-home-heading > p:last-child,
+html[data-theme="dark"] .gsat-home-action p {
+  color: #d2bda8;
+}
+
+html[data-theme="dark"] .gsat-home-count {
+  color: #f0a182;
+}
+
 .next-card,
 .panel,
 .analysis-card,
@@ -1175,6 +1268,16 @@ html[data-theme="dark"] .site-footer {
     grid-template-columns: 1fr;
   }
 
+  .gsat-home-card {
+    grid-template-columns: 1fr auto;
+  }
+
+  .gsat-home-action {
+    grid-column: 1 / -1;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
   .next-card {
     min-height: 330px;
   }
@@ -1248,6 +1351,26 @@ html[data-theme="dark"] .site-footer {
   .next-card,
   .today-panel {
     padding: 22px;
+  }
+
+  .gsat-home-card {
+    grid-template-columns: 1fr;
+    gap: 22px;
+    padding: 24px 22px;
+  }
+
+  .gsat-home-count {
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .gsat-home-action {
+    grid-column: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .gsat-home-action .button {
+    width: 100%;
   }
 
   .next-card {
