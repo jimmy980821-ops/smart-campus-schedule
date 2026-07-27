@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4f7fb" />
+    <meta name="description" content="適合高中生的智慧校園課表、作業與考試管理系統" />
+    <title>校園日程 Campus Flow</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">跳到主要內容</a>
+
+    <header class="site-header">
+      <nav class="navbar container" aria-label="主要導覽">
+        <a class="brand" href="#today" aria-label="回到今日課程">
+          <span class="brand-mark" aria-hidden="true">校</span>
+          <span>校園日程<small>Campus Flow</small></span>
+        </a>
+        <button class="menu-toggle" type="button" aria-label="開啟導覽選單" aria-expanded="false" aria-controls="nav-links">
+          <span></span><span></span><span></span>
+        </button>
+        <div class="nav-links" id="nav-links">
+          <a href="#today">今日課程</a>
+          <a href="#schedule">每週課表</a>
+          <a href="#assignments">作業管理</a>
+          <a href="#exams">考試倒數</a>
+          <a href="#free-periods">空堂分析</a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="main-content">
+      <section class="hero-section section" id="today" aria-labelledby="today-title">
+        <div class="container">
+          <div class="hero-heading">
+            <div>
+              <p class="eyebrow" id="today-date">載入日期中…</p>
+              <h1 id="today-title">今天，一步一步完成。</h1>
+              <p class="hero-copy">把課程、作業與考試放在同一個清楚的畫面，專注做好眼前的事。</p>
+            </div>
+            <button class="button button-light" id="notification-button" type="button" aria-label="開啟課程瀏覽器通知">
+              <span aria-hidden="true">◉</span> 開啟課程通知
+            </button>
+          </div>
+
+          <div class="today-layout">
+            <article class="next-card" id="next-course-card" aria-live="polite">
+              <div class="status-chip" id="next-course-status">下一節課</div>
+              <p class="next-label">接下來</p>
+              <h2 id="next-course-name">正在確認課表</h2>
+              <p class="next-meta" id="next-course-meta">—</p>
+              <div class="countdown" id="next-course-countdown">—</div>
+              <p class="countdown-label" id="next-course-countdown-label">距離上課時間</p>
+            </article>
+
+            <article class="panel today-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="section-kicker">TODAY</p>
+                  <h2>今日課程</h2>
+                </div>
+                <span class="course-count" id="today-course-count">0 節課</span>
+              </div>
+              <div class="today-course-list" id="today-course-list" aria-live="polite"></div>
+            </article>
+          </div>
+
+          <aside class="reminder-bar" id="course-reminder" aria-live="polite">
+            <span class="reminder-icon" aria-hidden="true">!</span>
+            <div>
+              <strong>課程提醒</strong>
+              <p id="reminder-text">正在確認下一節課資訊…</p>
+            </div>
+          </aside>
+          <p class="support-message" id="notification-message" role="status"></p>
+        </div>
+      </section>
+
+      <section class="section" id="schedule" aria-labelledby="schedule-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">WEEKLY PLAN</p>
+              <h2 id="schedule-title">每週課表</h2>
+              <p>點選任一課程，即可查看教室、老師與上課時間。</p>
+            </div>
+            <div class="legend" aria-label="課表狀態說明">
+              <span><i class="legend-dot current"></i>目前課程</span>
+              <span><i class="legend-dot next"></i>下一節課</span>
+            </div>
+          </div>
+          <div class="table-wrap" tabindex="0" aria-label="每週課表，可左右捲動">
+            <table class="schedule-table">
+              <thead>
+                <tr>
+                  <th scope="col">節次</th>
+                  <th scope="col">上課時間</th>
+                  <th scope="col">星期一</th>
+                  <th scope="col">星期二</th>
+                  <th scope="col">星期三</th>
+                  <th scope="col">星期四</th>
+                  <th scope="col">星期五</th>
+                </tr>
+              </thead>
+              <tbody id="schedule-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="section muted-section" id="assignments" aria-labelledby="assignments-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">TO-DO</p>
+              <h2 id="assignments-title">作業管理</h2>
+              <p>依期限自動排序，完成一件就少一件。</p>
+            </div>
+            <button class="button button-primary" id="add-assignment-button" type="button">＋ 新增作業</button>
+          </div>
+          <div class="summary-grid" id="assignment-summary" aria-label="作業統計"></div>
+          <div class="item-list" id="assignment-list" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="section" id="exams" aria-labelledby="exams-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">COUNTDOWN</p>
+              <h2 id="exams-title">考試倒數</h2>
+              <p>提早看見重要日期，把大目標拆成每天的進度。</p>
+            </div>
+            <button class="button button-primary" id="add-exam-button" type="button">＋ 新增考試</button>
+          </div>
+          <div class="exam-grid" id="exam-list" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="section muted-section" id="free-periods" aria-labelledby="free-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">SMART STUDY</p>
+              <h2 id="free-title">空堂分析</h2>
+              <p>讓零碎時間成為能完成小任務的專注時段。</p>
+            </div>
+          </div>
+          <div class="analysis-grid" id="free-period-analysis" aria-live="polite"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <p><strong>校園日程 Campus Flow</strong></p>
+        <p>為每一天留出清楚的節奏。</p>
+      </div>
+    </footer>
+
+    <dialog class="modal" id="course-modal" aria-labelledby="course-modal-title">
+      <div class="modal-header">
+        <div>
+          <p class="section-kicker">COURSE DETAIL</p>
+          <h2 id="course-modal-title">課程資訊</h2>
+        </div>
+        <button class="icon-button modal-close" type="button" aria-label="關閉課程資訊">×</button>
+      </div>
+      <div class="course-detail" id="course-detail"></div>
+    </dialog>
+
+    <dialog class="modal" id="assignment-modal" aria-labelledby="assignment-modal-title">
+      <form id="assignment-form" novalidate>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">ASSIGNMENT</p>
+            <h2 id="assignment-modal-title">新增作業</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" aria-label="關閉作業表單">×</button>
+        </div>
+        <input type="hidden" id="assignment-id" />
+        <label for="assignment-subject">科目</label>
+        <select id="assignment-subject" required></select>
+        <label for="assignment-content">作業內容</label>
+        <textarea id="assignment-content" rows="4" maxlength="120" placeholder="例如：完成習作第 32～35 頁" required></textarea>
+        <p class="field-error" id="assignment-content-error"></p>
+        <label for="assignment-due">繳交日期</label>
+        <input id="assignment-due" type="date" required />
+        <p class="field-error" id="assignment-due-error"></p>
+        <div class="form-actions">
+          <button class="button button-secondary modal-close" type="button">取消</button>
+          <button class="button button-primary" type="submit">儲存作業</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="modal" id="exam-modal" aria-labelledby="exam-modal-title">
+      <form id="exam-form" novalidate>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">EXAM</p>
+            <h2 id="exam-modal-title">新增考試</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" aria-label="關閉考試表單">×</button>
+        </div>
+        <input type="hidden" id="exam-id" />
+        <label for="exam-type">考試類型</label>
+        <select id="exam-type">
+          <option>段考</option>
+          <option>模擬考</option>
+          <option>學測</option>
+          <option>其他考試</option>
+        </select>
+        <label for="exam-name">考試名稱</label>
+        <input id="exam-name" type="text" maxlength="50" placeholder="例如：第一次段考" required />
+        <p class="field-error" id="exam-name-error"></p>
+        <label for="exam-date">考試日期</label>
+        <input id="exam-date" type="date" required />
+        <p class="field-error" id="exam-date-error"></p>
+        <div class="form-actions">
+          <button class="button button-secondary modal-close" type="button">取消</button>
+          <button class="button button-primary" type="submit">儲存考試</button>
+        </div>
+      </form>
+    </dialog>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="script.js" defer></script>
+  </body>
+</html>
