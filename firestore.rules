@@ -1,0 +1,27 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 每位使用者只能存取自己帳號下的課表管理資料。
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null
+                         && request.auth.uid == userId;
+    }
+
+    // 推播 Token 只能由擁有該裝置的登入者管理。
+    match /pushDevices/{deviceId} {
+      allow create: if request.auth != null
+                    && request.resource.data.uid == request.auth.uid;
+      allow read, delete: if request.auth != null
+                          && resource.data.uid == request.auth.uid;
+      allow update: if request.auth != null
+                    && resource.data.uid == request.auth.uid
+                    && request.resource.data.uid == request.auth.uid;
+    }
+
+    // 通知發送紀錄只允許受信任的伺服器存取。
+    match /pushNotificationRuns/{runId} {
+      allow read, write: if false;
+    }
+  }
+}

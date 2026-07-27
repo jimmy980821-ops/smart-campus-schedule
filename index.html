@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#f4f7fb" />
     <meta name="description" content="適合高中生的智慧校園課表、作業與考試管理系統" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="校園日程" />
     <title>校園日程 Campus Flow</title>
+    <link rel="icon" type="image/png" href="app-icon.png" />
+    <link rel="apple-touch-icon" href="app-icon.png" />
+    <link rel="manifest" href="site.webmanifest" />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
@@ -14,7 +20,7 @@
     <header class="site-header">
       <nav class="navbar container" aria-label="主要導覽">
         <a class="brand" href="#today" aria-label="回到今日課程">
-          <span class="brand-mark" aria-hidden="true">校</span>
+          <img class="brand-mark" src="app-icon.png" alt="" width="40" height="40" />
           <span>校園日程<small>Campus Flow</small></span>
         </a>
         <button class="menu-toggle" type="button" aria-label="開啟導覽選單" aria-expanded="false" aria-controls="nav-links">
@@ -39,9 +45,15 @@
               <h1 id="today-title">今天，一步一步完成。</h1>
               <p class="hero-copy">把課程、作業與考試放在同一個清楚的畫面，專注做好眼前的事。</p>
             </div>
-            <button class="button button-light" id="notification-button" type="button" aria-label="開啟課程瀏覽器通知">
-              <span aria-hidden="true">◉</span> 開啟課程通知
-            </button>
+            <div class="hero-actions">
+              <button class="button button-light" id="notification-button" type="button" aria-label="開啟課程背景通知">
+                <span aria-hidden="true">◉</span> 開啟背景通知
+              </button>
+              <button class="button button-primary" id="auth-button" type="button" aria-label="使用 Google 帳號登入並同步資料">
+                Google 登入同步
+              </button>
+              <p class="sync-status" id="auth-status" role="status" aria-live="polite">目前儲存在這台裝置</p>
+            </div>
           </div>
 
           <div class="today-layout">
@@ -83,7 +95,7 @@
             <div>
               <p class="section-kicker">WEEKLY PLAN</p>
               <h2 id="schedule-title">每週課表</h2>
-              <p>點選任一課程，即可查看教室、老師與上課時間。</p>
+              <p>高雄市立三民高中 305 班暑輔課表，點選課程可查看完整資訊。</p>
             </div>
             <div class="legend" aria-label="課表狀態說明">
               <span><i class="legend-dot current"></i>目前課程</span>
@@ -226,6 +238,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="script.js" defer></script>
+    <script type="module" src="script.js"></script>
   </body>
 </html>

@@ -1,4 +1,44 @@
-"use strict";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  getFirestore,
+  onSnapshot,
+  setDoc,
+  writeBatch
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+import {
+  getMessaging,
+  getToken,
+  isSupported as isMessagingSupported,
+  onMessage
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-messaging.js";
+
+// Firebase 公開的網站設定。這些識別資料不是密碼；資料安全由 Firestore 規則控管。
+const firebaseConfig = {
+  apiKey: "AIzaSyBU4gvnt7fVHwkRbqbJ-hBBlmZrP0MgKY4",
+  authDomain: "campus-flow-9965c.firebaseapp.com",
+  projectId: "campus-flow-9965c",
+  storageBucket: "campus-flow-9965c.firebasestorage.app",
+  messagingSenderId: "706339405367",
+  appId: "1:706339405367:web:6368418b712f0c613109b2",
+  measurementId: "G-MF082FK8VZ"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const database = getFirestore(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
+const VAPID_PUBLIC_KEY = "BHsz6TlMHrDVkDiNPBdvKYnJtKldrAukA_L37eyoyjO2k_Adr8Mxu3YWAI5L5h8oJVWHHgWXINkld01D5l1r9SU";
 
 /* =========================================================
    課表資料集中區：日後只要修改此區即可調整時間與課程
@@ -10,66 +50,64 @@ const periodTimes = [
   { period: 3, start: "10:10", end: "11:00" },
   { period: 4, start: "11:10", end: "12:00" },
   { period: 5, start: "13:10", end: "14:00" },
-  { period: 6, start: "14:10", end: "15:00" },
-  { period: 7, start: "15:10", end: "16:00" },
-  { period: 8, start: "16:10", end: "17:00" }
+  { period: 6, start: "14:20", end: "15:10" }
 ];
 
 const weeklySchedule = {
   1: [
-    { period: 1, subject: "國文", room: "301 教室", teacher: "林老師" },
-    { period: 2, subject: "英文", room: "301 教室", teacher: "王老師" },
-    { period: 3, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 4, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 5, subject: "物理", room: "物理實驗室", teacher: "張老師" },
-    { period: 7, subject: "體育", room: "操場", teacher: "劉老師" }
+    { period: 1, subject: "導師時間", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 2, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
+    { period: 3, subject: "化學輔導", room: "305 教室", teacher: "余璧婷" },
+    { period: 4, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 5, subject: "國文寫作", room: "305 教室", teacher: "張育愷" },
+    { period: 6, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻" }
   ],
   2: [
-    { period: 1, subject: "英文", room: "301 教室", teacher: "王老師" },
-    { period: 2, subject: "歷史", room: "301 教室", teacher: "許老師" },
-    { period: 3, subject: "國文", room: "301 教室", teacher: "林老師" },
-    { period: 5, subject: "化學", room: "化學實驗室", teacher: "周老師" },
-    { period: 6, subject: "化學", room: "化學實驗室", teacher: "周老師" },
-    { period: 8, subject: "自主學習", room: "圖書館", teacher: "導師" }
+    { period: 1, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 2, subject: "化學輔導", room: "305 教室", teacher: "余璧婷" },
+    { period: 3, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 4, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 5, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
+    { period: 6, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" }
   ],
   3: [
-    { period: 1, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 2, subject: "物理", room: "301 教室", teacher: "張老師" },
-    { period: 4, subject: "英文", room: "語言教室", teacher: "王老師" },
-    { period: 5, subject: "資訊科技", room: "電腦教室", teacher: "蔡老師" },
-    { period: 6, subject: "資訊科技", room: "電腦教室", teacher: "蔡老師" },
-    { period: 7, subject: "地理", room: "301 教室", teacher: "郭老師" }
+    { period: 1, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 2, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 3, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
+    { period: 4, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
+    { period: 5, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 6, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" }
   ],
   4: [
-    { period: 1, subject: "國文", room: "301 教室", teacher: "林老師" },
-    { period: 2, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 3, subject: "歷史", room: "301 教室", teacher: "許老師" },
-    { period: 4, subject: "地理", room: "301 教室", teacher: "郭老師" },
-    { period: 6, subject: "英文", room: "語言教室", teacher: "王老師" },
-    { period: 7, subject: "體育", room: "體育館", teacher: "劉老師" }
+    { period: 1, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 2, subject: "英語文作文", room: "305 教室", teacher: "鄭慧真" },
+    { period: 3, subject: "化學輔導", room: "305 教室", teacher: "余璧婷" },
+    { period: 4, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 5, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 6, subject: "選修生物／選修地球科學", room: "305 教室", teacher: "朱則華、李冠葦" }
   ],
   5: [
-    { period: 1, subject: "化學", room: "301 教室", teacher: "周老師" },
-    { period: 3, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 4, subject: "國文", room: "301 教室", teacher: "林老師" },
-    { period: 5, subject: "物理", room: "物理實驗室", teacher: "張老師" },
-    { period: 6, subject: "自主學習", room: "圖書館", teacher: "導師" },
-    { period: 8, subject: "班級活動", room: "301 教室", teacher: "導師" }
+    { period: 1, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 2, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 3, subject: "生物輔導", room: "305 教室", teacher: "李冠葦" },
+    { period: 4, subject: "地球科學輔導", room: "305 教室", teacher: "朱則華" },
+    { period: 5, subject: "化學輔導", room: "305 教室", teacher: "余璧婷" },
+    { period: 6, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻" }
   ]
 };
 
 const subjectColors = {
-  國文: "#f9e8df",
-  英文: "#e3f0fd",
-  數學: "#e5e9fb",
-  物理: "#e2f3ef",
-  化學: "#f0e6f6",
-  歷史: "#f7edda",
-  地理: "#e7f2dc",
-  體育: "#ffe8dc",
-  資訊科技: "#dfeff4",
-  自主學習: "#ece9f8",
-  班級活動: "#f3e8ed"
+  導師時間: "#ece9f8",
+  國文輔導: "#f9e8df",
+  國文寫作: "#f7e3dc",
+  英文輔導: "#e3f0fd",
+  英語文作文: "#dcecfb",
+  數學輔導: "#e5e9fb",
+  物理輔導: "#e2f3ef",
+  化學輔導: "#f0e6f6",
+  生物輔導: "#e7f2dc",
+  地球科學輔導: "#f7edda",
+  "選修生物／選修地球科學": "#e4efe4"
 };
 /* ====================== 課表資料集中區結束 ====================== */
 
@@ -87,6 +125,10 @@ let exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
 let notificationTimer = null;
 let toastTimer = null;
 let notifiedCourseKey = "";
+let currentUser = null;
+let cloudUnsubscribers = [];
+let messaging = null;
+let serviceWorkerRegistration = null;
 
 const elements = {
   todayDate: document.querySelector("#today-date"),
@@ -101,6 +143,8 @@ const elements = {
   reminderText: document.querySelector("#reminder-text"),
   notificationButton: document.querySelector("#notification-button"),
   notificationMessage: document.querySelector("#notification-message"),
+  authButton: document.querySelector("#auth-button"),
+  authStatus: document.querySelector("#auth-status"),
   scheduleBody: document.querySelector("#schedule-body"),
   assignmentSummary: document.querySelector("#assignment-summary"),
   assignmentList: document.querySelector("#assignment-list"),
@@ -126,6 +170,8 @@ function init() {
   updateLiveCourseState();
   bindEvents();
   setDefaultFormDates();
+  initializePwa();
+  initializeCloudSync();
   notificationTimer = window.setInterval(updateLiveCourseState, 30000);
 }
 
@@ -134,7 +180,8 @@ function bindEvents() {
   document.querySelector("#add-exam-button").addEventListener("click", () => openExamModal());
   elements.assignmentForm.addEventListener("submit", saveAssignment);
   elements.examForm.addEventListener("submit", saveExam);
-  elements.notificationButton.addEventListener("click", requestNotificationPermission);
+  elements.notificationButton.addEventListener("click", enableBackgroundNotifications);
+  elements.authButton.addEventListener("click", handleAuthButton);
   elements.menuButton.addEventListener("click", toggleMenu);
 
   elements.navLinks.addEventListener("click", (event) => {
@@ -153,7 +200,301 @@ function bindEvents() {
 
   window.addEventListener("beforeunload", () => {
     if (notificationTimer) window.clearInterval(notificationTimer);
+    stopCloudListeners();
   });
+}
+
+/* ====================== Firebase 登入與跨裝置同步 ====================== */
+
+function initializeCloudSync() {
+  onAuthStateChanged(auth, async (user) => {
+    stopCloudListeners();
+    currentUser = user;
+    updateAuthInterface();
+
+    if (!user) {
+      assignments = loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments());
+      exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
+      renderAssignments();
+      renderExams();
+      return;
+    }
+
+    setSyncStatus("正在同步雲端資料…");
+    try {
+      await migrateLocalDataToCloud(user.uid);
+      startCloudListeners(user.uid);
+      refreshExistingPushToken();
+    } catch (error) {
+      handleCloudError(error);
+    }
+  });
+}
+
+async function handleAuthButton() {
+  elements.authButton.disabled = true;
+  try {
+    if (currentUser) {
+      await removeCurrentPushDevice();
+      await signOut(auth);
+      showToast("已登出，改用本機資料");
+    } else {
+      await signInWithPopup(auth, googleProvider);
+      showToast("登入成功，開始同步");
+    }
+  } catch (error) {
+    const cancelled = ["auth/popup-closed-by-user", "auth/cancelled-popup-request"].includes(error.code);
+    if (!cancelled) {
+      setSyncStatus("登入失敗，請確認 Firebase 已啟用 Google 登入");
+      showToast("Google 登入未完成");
+      console.error("Firebase authentication failed:", error);
+    }
+  } finally {
+    elements.authButton.disabled = false;
+  }
+}
+
+function updateAuthInterface() {
+  if (currentUser) {
+    const displayName = currentUser.displayName || currentUser.email || "已登入";
+    elements.authButton.textContent = "登出";
+    elements.authButton.setAttribute("aria-label", `登出 ${displayName}`);
+    setSyncStatus(`${displayName}・雲端同步中`, true);
+  } else {
+    elements.authButton.textContent = "Google 登入同步";
+    elements.authButton.setAttribute("aria-label", "使用 Google 帳號登入並同步資料");
+    setSyncStatus("目前儲存在這台裝置");
+  }
+}
+
+function setSyncStatus(message, isSynced = false) {
+  elements.authStatus.textContent = message;
+  elements.authStatus.classList.toggle("is-synced", isSynced);
+}
+
+async function migrateLocalDataToCloud(userId) {
+  await Promise.all([
+    uploadLocalCollectionWhenCloudIsEmpty(userId, "assignments", assignments),
+    uploadLocalCollectionWhenCloudIsEmpty(userId, "exams", exams)
+  ]);
+}
+
+async function uploadLocalCollectionWhenCloudIsEmpty(userId, collectionName, items) {
+  const cloudCollection = collection(database, "users", userId, collectionName);
+  const snapshot = await getDocs(cloudCollection);
+  if (!snapshot.empty || !items.length) return;
+
+  const batch = writeBatch(database);
+  items.forEach((item) => {
+    batch.set(doc(cloudCollection, item.id), { ...item, updatedAt: Date.now() });
+  });
+  await batch.commit();
+}
+
+function startCloudListeners(userId) {
+  const subscribe = (collectionName, applyItems) => onSnapshot(
+    collection(database, "users", userId, collectionName),
+    (snapshot) => {
+      const items = snapshot.docs.map((itemDocument) => ({
+        ...itemDocument.data(),
+        id: itemDocument.id
+      }));
+      applyItems(items);
+      setSyncStatus(`${currentUser?.displayName || "已登入"}・資料已同步`, true);
+    },
+    handleCloudError
+  );
+
+  cloudUnsubscribers = [
+    subscribe("assignments", (items) => {
+      assignments = items;
+      saveStorage(STORAGE_KEYS.assignments, assignments);
+      renderAssignments();
+    }),
+    subscribe("exams", (items) => {
+      exams = items;
+      saveStorage(STORAGE_KEYS.exams, exams);
+      renderExams();
+    })
+  ];
+}
+
+function stopCloudListeners() {
+  cloudUnsubscribers.forEach((unsubscribe) => unsubscribe());
+  cloudUnsubscribers = [];
+}
+
+async function syncCloudRecord(collectionName, item) {
+  if (!currentUser) return;
+  try {
+    await setDoc(
+      doc(database, "users", currentUser.uid, collectionName, item.id),
+      { ...item, updatedAt: Date.now() }
+    );
+  } catch (error) {
+    handleCloudError(error);
+  }
+}
+
+async function deleteCloudRecord(collectionName, id) {
+  if (!currentUser) return;
+  try {
+    await deleteDoc(doc(database, "users", currentUser.uid, collectionName, id));
+  } catch (error) {
+    handleCloudError(error);
+  }
+}
+
+function handleCloudError(error) {
+  setSyncStatus("雲端同步暫時失敗，資料仍保存在本機");
+  console.error("Firebase sync failed:", error);
+}
+
+/* ====================== PWA 與 Firebase 背景推播 ====================== */
+
+async function initializePwa() {
+  if (!("serviceWorker" in navigator)) {
+    elements.notificationMessage.textContent = "此瀏覽器不支援背景通知，仍可使用網站內提醒。";
+    return;
+  }
+
+  try {
+    serviceWorkerRegistration = await navigator.serviceWorker.register("./firebase-messaging-sw.js", {
+      scope: "./"
+    });
+
+    if (await isMessagingSupported()) {
+      messaging = getMessaging(firebaseApp);
+      onMessage(messaging, showForegroundPushMessage);
+      refreshExistingPushToken();
+    }
+  } catch (error) {
+    elements.notificationMessage.textContent = "背景服務暫時無法啟動，請重新整理後再試。";
+    console.error("PWA initialization failed:", error);
+  }
+}
+
+async function enableBackgroundNotifications() {
+  if (!window.isSecureContext || !("Notification" in window) || !("serviceWorker" in navigator)) {
+    elements.notificationMessage.textContent = "此瀏覽器不支援背景通知，請使用 HTTPS 網址開啟。";
+    return;
+  }
+
+  if (isIosDevice() && !isStandalonePwa()) {
+    elements.notificationMessage.textContent = "iPhone 請先點 Safari 分享按鈕 →「加入主畫面」，再從主畫面開啟校園日程。";
+    showToast("請先加入 iPhone 主畫面");
+    return;
+  }
+
+  if (!currentUser) {
+    elements.notificationMessage.textContent = "請先使用 Google 帳號登入，再開啟背景通知。";
+    showToast("請先登入 Google 帳號");
+    return;
+  }
+
+  elements.notificationButton.disabled = true;
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      elements.notificationMessage.textContent = permission === "denied"
+        ? "通知已被封鎖，請到裝置的通知設定中重新允許。"
+        : "尚未允許通知，網站內提醒仍可正常使用。";
+      return;
+    }
+
+    const token = await registerPushDevice();
+    if (!token) throw new Error("FCM did not return a registration token.");
+
+    elements.notificationButton.textContent = "背景通知已開啟";
+    elements.notificationMessage.textContent = "設定完成；關閉網站後仍可在上課前收到通知。";
+    showToast("背景通知已開啟");
+  } catch (error) {
+    elements.notificationMessage.textContent = "背景通知設定失敗，請確認 Firebase Cloud Messaging 已啟用。";
+    console.error("Push notification setup failed:", error);
+  } finally {
+    elements.notificationButton.disabled = false;
+  }
+}
+
+async function registerPushDevice() {
+  if (!messaging || !currentUser) return "";
+  serviceWorkerRegistration ||= await navigator.serviceWorker.ready;
+
+  const token = await getToken(messaging, {
+    vapidKey: VAPID_PUBLIC_KEY,
+    serviceWorkerRegistration
+  });
+  if (!token) return "";
+
+  const deviceId = await hashText(token);
+  await setDoc(doc(database, "pushDevices", deviceId), {
+    uid: currentUser.uid,
+    token,
+    platform: getDeviceLabel(),
+    updatedAt: Date.now()
+  });
+  localStorage.setItem("campusFlowPushDeviceId", deviceId);
+  return token;
+}
+
+async function refreshExistingPushToken() {
+  if (!("Notification" in window) || Notification.permission !== "granted" || !messaging || !currentUser) return;
+  try {
+    const token = await registerPushDevice();
+    if (token) {
+      elements.notificationButton.textContent = "背景通知已開啟";
+      elements.notificationMessage.textContent = "此裝置已啟用背景課程提醒。";
+    }
+  } catch (error) {
+    console.warn("Push token refresh failed:", error);
+  }
+}
+
+async function removeCurrentPushDevice() {
+  const deviceId = localStorage.getItem("campusFlowPushDeviceId");
+  if (!deviceId || !currentUser) return;
+  try {
+    await deleteDoc(doc(database, "pushDevices", deviceId));
+    localStorage.removeItem("campusFlowPushDeviceId");
+  } catch (error) {
+    console.warn("Push device removal failed:", error);
+  }
+}
+
+async function showForegroundPushMessage(payload) {
+  const data = payload.data || {};
+  const title = data.title || "校園日程提醒";
+  const options = {
+    body: data.body || "有新的課程提醒。",
+    icon: data.icon || "./app-icon.png",
+    badge: "./app-icon.png",
+    tag: data.tag || "campus-flow-reminder",
+    data: { url: data.url || "./" }
+  };
+
+  if (serviceWorkerRegistration && Notification.permission === "granted") {
+    await serviceWorkerRegistration.showNotification(title, options);
+  }
+}
+
+function isIosDevice() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function isStandalonePwa() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function getDeviceLabel() {
+  if (isIosDevice()) return "iPhone／iPad";
+  if (/Android/i.test(navigator.userAgent)) return "Android";
+  return "電腦瀏覽器";
+}
+
+async function hashText(value) {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function updateLiveCourseState() {
@@ -366,7 +707,7 @@ function openAssignmentModal(item = null) {
   elements.assignmentModal.showModal();
 }
 
-function saveAssignment(event) {
+async function saveAssignment(event) {
   event.preventDefault();
   const id = document.querySelector("#assignment-id").value;
   const subject = document.querySelector("#assignment-subject").value;
@@ -385,20 +726,24 @@ function saveAssignment(event) {
   }
   if (!valid) return;
 
+  let savedAssignment;
   if (id) {
     assignments = assignments.map((item) => item.id === id ? { ...item, subject, content, dueDate } : item);
+    savedAssignment = assignments.find((item) => item.id === id);
     showToast("資料已更新");
   } else {
-    assignments.push({ id: createId(), subject, content, dueDate, completed: false });
+    savedAssignment = { id: createId(), subject, content, dueDate, completed: false };
+    assignments.push(savedAssignment);
     showToast("作業新增成功");
   }
 
   saveStorage(STORAGE_KEYS.assignments, assignments);
   renderAssignments();
   elements.assignmentModal.close();
+  await syncCloudRecord("assignments", savedAssignment);
 }
 
-function handleAssignmentAction(action, id) {
+async function handleAssignmentAction(action, id) {
   const item = assignments.find((assignment) => assignment.id === id);
   if (!item) return;
 
@@ -409,11 +754,13 @@ function handleAssignmentAction(action, id) {
     saveStorage(STORAGE_KEYS.assignments, assignments);
     renderAssignments();
     showToast(item.completed ? "作業已完成" : "已改為未完成");
+    await syncCloudRecord("assignments", item);
   } else if (action === "delete" && window.confirm(`確定要刪除「${item.content}」嗎？此操作無法復原。`)) {
     assignments = assignments.filter((assignment) => assignment.id !== id);
     saveStorage(STORAGE_KEYS.assignments, assignments);
     renderAssignments();
     showToast("作業已刪除");
+    await deleteCloudRecord("assignments", id);
   }
 }
 
@@ -459,7 +806,7 @@ function openExamModal(item = null) {
   elements.examModal.showModal();
 }
 
-function saveExam(event) {
+async function saveExam(event) {
   event.preventDefault();
   const id = document.querySelector("#exam-id").value;
   const type = document.querySelector("#exam-type").value;
@@ -478,20 +825,24 @@ function saveExam(event) {
   }
   if (!valid) return;
 
+  let savedExam;
   if (id) {
     exams = exams.map((item) => item.id === id ? { ...item, type, name, date } : item);
+    savedExam = exams.find((item) => item.id === id);
     showToast("資料已更新");
   } else {
-    exams.push({ id: createId(), type, name, date });
+    savedExam = { id: createId(), type, name, date };
+    exams.push(savedExam);
     showToast("考試新增成功");
   }
 
   saveStorage(STORAGE_KEYS.exams, exams);
   renderExams();
   elements.examModal.close();
+  await syncCloudRecord("exams", savedExam);
 }
 
-function handleExamAction(action, id) {
+async function handleExamAction(action, id) {
   const item = exams.find((exam) => exam.id === id);
   if (!item) return;
   if (action === "edit") {
@@ -501,6 +852,7 @@ function handleExamAction(action, id) {
     saveStorage(STORAGE_KEYS.exams, exams);
     renderExams();
     showToast("考試已刪除");
+    await deleteCloudRecord("exams", id);
   }
 }
 
@@ -544,34 +896,6 @@ function createAnalysisCards(items) {
     </article>`).join("");
 }
 
-async function requestNotificationPermission() {
-  if (!("Notification" in window)) {
-    elements.notificationMessage.textContent = "此瀏覽器不支援通知功能，課程提醒仍會顯示在網站內。";
-    return;
-  }
-
-  if (!window.isSecureContext) {
-    elements.notificationMessage.textContent = "瀏覽器通知需透過 HTTPS 或 localhost 開啟；目前仍可使用頁面內提醒。";
-    return;
-  }
-
-  try {
-    const permission = await Notification.requestPermission();
-    if (permission === "granted") {
-      elements.notificationMessage.textContent = "課程通知已開啟，將於上課前 10 分鐘提醒。";
-      showToast("課程通知已開啟");
-      updateLiveCourseState();
-    } else if (permission === "denied") {
-      elements.notificationMessage.textContent = "通知權限已被封鎖，可至瀏覽器網站設定中重新開啟。";
-    } else {
-      elements.notificationMessage.textContent = "尚未開啟通知，課程提醒仍會顯示在網站內。";
-    }
-  } catch (error) {
-    elements.notificationMessage.textContent = "暫時無法開啟通知，請稍後再試。";
-    console.warn("通知權限請求失敗：", error);
-  }
-}
-
 function maybeSendClassNotification(liveState) {
   if (!("Notification" in window) || Notification.permission !== "granted" || !liveState.nextCourse) return;
   if (liveState.minutesUntil < 0 || liveState.minutesUntil > 10) return;
@@ -581,10 +905,18 @@ function maybeSendClassNotification(liveState) {
   if (notifiedCourseKey === key) return;
 
   const time = getPeriodTime(course.period);
-  new Notification(`準備上課：${course.subject}`, {
+  const options = {
     body: `${time.start} 在${course.room}上課，還有 ${liveState.minutesUntil} 分鐘。`,
-    tag: key
-  });
+    icon: "./app-icon.png",
+    badge: "./app-icon.png",
+    tag: key,
+    data: { url: "./" }
+  };
+  if (serviceWorkerRegistration) {
+    serviceWorkerRegistration.showNotification(`準備上課：${course.subject}`, options);
+  } else {
+    new Notification(`準備上課：${course.subject}`, options);
+  }
   notifiedCourseKey = key;
 }
 
@@ -704,9 +1036,9 @@ function saveStorage(key, value) {
 
 function createDefaultAssignments() {
   return [
-    { id: "demo-a1", subject: "數學", content: "完成講義二次函數練習", dueDate: toDateInput(addDays(new Date(), 1)), completed: false },
-    { id: "demo-a2", subject: "英文", content: "背誦第三課單字與例句", dueDate: toDateInput(addDays(new Date(), 3)), completed: false },
-    { id: "demo-a3", subject: "物理", content: "整理牛頓運動定律實驗紀錄", dueDate: toDateInput(addDays(new Date(), 6)), completed: false }
+    { id: "demo-a1", subject: "數學輔導", content: "完成講義二次函數練習", dueDate: toDateInput(addDays(new Date(), 1)), completed: false },
+    { id: "demo-a2", subject: "英文輔導", content: "背誦第三課單字與例句", dueDate: toDateInput(addDays(new Date(), 3)), completed: false },
+    { id: "demo-a3", subject: "物理輔導", content: "整理牛頓運動定律實驗紀錄", dueDate: toDateInput(addDays(new Date(), 6)), completed: false }
   ];
 }
 
