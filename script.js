@@ -113,7 +113,8 @@ const subjectColors = {
 
 const STORAGE_KEYS = {
   assignments: "campusFlowAssignments",
-  exams: "campusFlowExams"
+  exams: "campusFlowExams",
+  theme: "campusFlowTheme"
 };
 
 const weekdayNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
@@ -156,6 +157,10 @@ const elements = {
   examForm: document.querySelector("#exam-form"),
   courseModal: document.querySelector("#course-modal"),
   toast: document.querySelector("#toast"),
+  themeButton: document.querySelector("#theme-toggle"),
+  themeIcon: document.querySelector("#theme-toggle-icon"),
+  themeLabel: document.querySelector("#theme-toggle-label"),
+  themeColorMeta: document.querySelector("#theme-color-meta"),
   menuButton: document.querySelector(".menu-toggle"),
   navLinks: document.querySelector("#nav-links")
 };
@@ -163,6 +168,7 @@ const elements = {
 document.addEventListener("DOMContentLoaded", init);
 
 function init() {
+  initializeTheme();
   populateSubjectOptions();
   renderSchedule();
   renderAssignments();
@@ -182,6 +188,7 @@ function bindEvents() {
   elements.examForm.addEventListener("submit", saveExam);
   elements.notificationButton.addEventListener("click", enableBackgroundNotifications);
   elements.authButton.addEventListener("click", handleAuthButton);
+  elements.themeButton.addEventListener("click", toggleTheme);
   elements.menuButton.addEventListener("click", toggleMenu);
 
   elements.navLinks.addEventListener("click", (event) => {
@@ -202,6 +209,49 @@ function bindEvents() {
     if (notificationTimer) window.clearInterval(notificationTimer);
     stopCloudListeners();
   });
+}
+
+/* ====================== 白天／黑夜模式 ====================== */
+
+function initializeTheme() {
+  const savedTheme = getSavedTheme();
+  const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  applyTheme(savedTheme || systemTheme);
+
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+    if (!getSavedTheme()) applyTheme(event.matches ? "dark" : "light");
+  });
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  const nextTheme = currentTheme === "dark" ? "light" : "dark";
+  try {
+    localStorage.setItem(STORAGE_KEYS.theme, nextTheme);
+  } catch {
+    // localStorage 無法使用時仍可在本次瀏覽中切換。
+  }
+  applyTheme(nextTheme);
+  showToast(nextTheme === "dark" ? "已切換為黑夜模式" : "已切換為白天模式");
+}
+
+function applyTheme(theme) {
+  const isDark = theme === "dark";
+  document.documentElement.dataset.theme = isDark ? "dark" : "light";
+  elements.themeButton.setAttribute("aria-pressed", String(isDark));
+  elements.themeButton.setAttribute("aria-label", isDark ? "切換為白天模式" : "切換為黑夜模式");
+  elements.themeIcon.textContent = isDark ? "☀" : "☾";
+  elements.themeLabel.textContent = isDark ? "白天" : "黑夜";
+  elements.themeColorMeta.setAttribute("content", isDark ? "#0d1524" : "#f4f7fb");
+}
+
+function getSavedTheme() {
+  try {
+    const savedTheme = localStorage.getItem(STORAGE_KEYS.theme);
+    return savedTheme === "dark" || savedTheme === "light" ? savedTheme : "";
+  } catch {
+    return "";
+  }
 }
 
 /* ====================== Firebase 登入與跨裝置同步 ====================== */
