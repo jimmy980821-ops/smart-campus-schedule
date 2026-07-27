@@ -10,66 +10,64 @@ const periodTimes = [
   { period: 3, start: "10:10", end: "11:00" },
   { period: 4, start: "11:10", end: "12:00" },
   { period: 5, start: "13:10", end: "14:00" },
-  { period: 6, start: "14:10", end: "15:00" },
-  { period: 7, start: "15:10", end: "16:00" },
-  { period: 8, start: "16:10", end: "17:00" }
+  { period: 6, start: "14:20", end: "15:10" }
 ];
 
 const weeklySchedule = {
   1: [
-    { period: 1, subject: "國文", room: "301 教室", teacher: "林老師" },
-    { period: 2, subject: "英文", room: "301 教室", teacher: "王老師" },
-    { period: 3, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 4, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 5, subject: "物理", room: "物理實驗室", teacher: "張老師" },
-    { period: 7, subject: "體育", room: "操場", teacher: "劉老師" }
+    { period: 1, subject: "導師時間", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 2, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
+    { period: 3, subject: "化學輔導", room: "305 教室", teacher: "余璧婷" },
+    { period: 4, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 5, subject: "國文寫作", room: "305 教室", teacher: "張育愷" },
+    { period: 6, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻" }
   ],
   2: [
-    { period: 1, subject: "英文", room: "301 教室", teacher: "王老師" },
-    { period: 2, subject: "歷史", room: "301 教室", teacher: "許老師" },
-    { period: 3, subject: "國文", room: "301 教室", teacher: "林老師" },
-    { period: 5, subject: "化學", room: "化學實驗室", teacher: "周老師" },
-    { period: 6, subject: "化學", room: "化學實驗室", teacher: "周老師" },
-    { period: 8, subject: "自主學習", room: "圖書館", teacher: "導師" }
+    { period: 1, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 2, subject: "化學輔導", room: "305 教室", teacher: "余璧婷" },
+    { period: 3, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 4, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 5, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
+    { period: 6, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" }
   ],
   3: [
-    { period: 1, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 2, subject: "物理", room: "301 教室", teacher: "張老師" },
-    { period: 4, subject: "英文", room: "語言教室", teacher: "王老師" },
-    { period: 5, subject: "資訊科技", room: "電腦教室", teacher: "蔡老師" },
-    { period: 6, subject: "資訊科技", room: "電腦教室", teacher: "蔡老師" },
-    { period: 7, subject: "地理", room: "301 教室", teacher: "郭老師" }
+    { period: 1, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 2, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 3, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
+    { period: 4, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
+    { period: 5, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 6, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" }
   ],
   4: [
-    { period: 1, subject: "國文", room: "301 教室", teacher: "林老師" },
-    { period: 2, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 3, subject: "歷史", room: "301 教室", teacher: "許老師" },
-    { period: 4, subject: "地理", room: "301 教室", teacher: "郭老師" },
-    { period: 6, subject: "英文", room: "語言教室", teacher: "王老師" },
-    { period: 7, subject: "體育", room: "體育館", teacher: "劉老師" }
+    { period: 1, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 2, subject: "英語文作文", room: "305 教室", teacher: "鄭慧真" },
+    { period: 3, subject: "化學輔導", room: "305 教室", teacher: "余璧婷" },
+    { period: 4, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 5, subject: "國文輔導", room: "305 教室", teacher: "張育愷" },
+    { period: 6, subject: "選修生物／選修地球科學", room: "305 教室", teacher: "朱則華、李冠葦" }
   ],
   5: [
-    { period: 1, subject: "化學", room: "301 教室", teacher: "周老師" },
-    { period: 3, subject: "數學", room: "301 教室", teacher: "陳老師" },
-    { period: 4, subject: "國文", room: "301 教室", teacher: "林老師" },
-    { period: 5, subject: "物理", room: "物理實驗室", teacher: "張老師" },
-    { period: 6, subject: "自主學習", room: "圖書館", teacher: "導師" },
-    { period: 8, subject: "班級活動", room: "301 教室", teacher: "導師" }
+    { period: 1, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 2, subject: "數學輔導", room: "305 教室", teacher: "李俊緯" },
+    { period: 3, subject: "生物輔導", room: "305 教室", teacher: "李冠葦" },
+    { period: 4, subject: "地球科學輔導", room: "305 教室", teacher: "朱則華" },
+    { period: 5, subject: "化學輔導", room: "305 教室", teacher: "余璧婷" },
+    { period: 6, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻" }
   ]
 };
 
 const subjectColors = {
-  國文: "#f9e8df",
-  英文: "#e3f0fd",
-  數學: "#e5e9fb",
-  物理: "#e2f3ef",
-  化學: "#f0e6f6",
-  歷史: "#f7edda",
-  地理: "#e7f2dc",
-  體育: "#ffe8dc",
-  資訊科技: "#dfeff4",
-  自主學習: "#ece9f8",
-  班級活動: "#f3e8ed"
+  導師時間: "#ece9f8",
+  國文輔導: "#f9e8df",
+  國文寫作: "#f7e3dc",
+  英文輔導: "#e3f0fd",
+  英語文作文: "#dcecfb",
+  數學輔導: "#e5e9fb",
+  物理輔導: "#e2f3ef",
+  化學輔導: "#f0e6f6",
+  生物輔導: "#e7f2dc",
+  地球科學輔導: "#f7edda",
+  "選修生物／選修地球科學": "#e4efe4"
 };
 /* ====================== 課表資料集中區結束 ====================== */
 
@@ -704,9 +702,9 @@ function saveStorage(key, value) {
 
 function createDefaultAssignments() {
   return [
-    { id: "demo-a1", subject: "數學", content: "完成講義二次函數練習", dueDate: toDateInput(addDays(new Date(), 1)), completed: false },
-    { id: "demo-a2", subject: "英文", content: "背誦第三課單字與例句", dueDate: toDateInput(addDays(new Date(), 3)), completed: false },
-    { id: "demo-a3", subject: "物理", content: "整理牛頓運動定律實驗紀錄", dueDate: toDateInput(addDays(new Date(), 6)), completed: false }
+    { id: "demo-a1", subject: "數學輔導", content: "完成講義二次函數練習", dueDate: toDateInput(addDays(new Date(), 1)), completed: false },
+    { id: "demo-a2", subject: "英文輔導", content: "背誦第三課單字與例句", dueDate: toDateInput(addDays(new Date(), 3)), completed: false },
+    { id: "demo-a3", subject: "物理輔導", content: "整理牛頓運動定律實驗紀錄", dueDate: toDateInput(addDays(new Date(), 6)), completed: false }
   ];
 }
 
