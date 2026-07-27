@@ -406,7 +406,7 @@ async function enableBackgroundNotifications() {
     if (!token) throw new Error("FCM did not return a registration token.");
 
     elements.notificationButton.textContent = "背景通知已開啟";
-    elements.notificationMessage.textContent = "設定完成；關閉網站後仍可在上課前收到通知。";
+    elements.notificationMessage.textContent = "設定完成；關閉網站後仍可收到課程、作業與學測倒數通知。";
     showToast("背景通知已開啟");
   } catch (error) {
     elements.notificationMessage.textContent = "背景通知設定失敗，請確認 Firebase Cloud Messaging 已啟用。";
@@ -443,7 +443,7 @@ async function refreshExistingPushToken() {
     const token = await registerPushDevice();
     if (token) {
       elements.notificationButton.textContent = "背景通知已開啟";
-      elements.notificationMessage.textContent = "此裝置已啟用背景課程提醒。";
+      elements.notificationMessage.textContent = "此裝置已啟用課程、作業與學測背景提醒。";
     }
   } catch (error) {
     console.warn("Push token refresh failed:", error);
@@ -465,7 +465,7 @@ async function showForegroundPushMessage(payload) {
   const data = payload.data || {};
   const title = data.title || "校園日程提醒";
   const options = {
-    body: data.body || "有新的課程提醒。",
+    body: data.body || "有新的校園日程提醒。",
     icon: data.icon || "./app-icon.png",
     badge: "./app-icon.png",
     tag: data.tag || "campus-flow-reminder",

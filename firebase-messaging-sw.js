@@ -76,7 +76,7 @@ self.addEventListener("fetch", (event) => {
 messaging.onBackgroundMessage((payload) => {
   const data = payload.data || {};
   return self.registration.showNotification(data.title || "校園日程提醒", {
-    body: data.body || "有新的課程提醒。",
+    body: data.body || "有新的校園日程提醒。",
     icon: data.icon || "./app-icon.png",
     badge: "./app-icon.png",
     tag: data.tag || "campus-flow-reminder",

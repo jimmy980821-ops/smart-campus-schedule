@@ -1,9 +1,10 @@
-name: Send class reminders
+name: Send campus reminders
 
 on:
   schedule:
-    # 臺灣時間週一至週五 08:00–14:59，每五分鐘檢查一次。
-    - cron: "*/5 0-6 * * 1-5"
+    # 臺灣時間每天 07:00、08:00–14:59 與 20:00 時段，每五分鐘檢查一次。
+    # 課程只會在平日觸發；作業與學測提醒包含週末。
+    - cron: "*/5 23,0-6,12 * * *"
   workflow_dispatch:
     inputs:
       send_test:
@@ -21,7 +22,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Send scheduled notification
         env:

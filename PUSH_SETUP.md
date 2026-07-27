@@ -1,6 +1,6 @@
 # iPhone 背景通知啟用步驟
 
-網站端已包含 PWA、Service Worker、Firebase Cloud Messaging 與免費的 GitHub Actions 課程排程。完成以下一次性設定後，即可在網站關閉時接收通知。
+網站端已包含 PWA、Service Worker、Firebase Cloud Messaging 與免費的 GitHub Actions 排程。完成以下一次性設定後，即可在網站關閉時接收課程、作業與學測倒數通知。
 
 ## 1. 更新 Firestore 規則
 
@@ -22,7 +22,13 @@
 
 GitHub 的定時工作只會從預設分支執行。合併目前的 Pull Request 後，`.github/workflows/class-reminders.yml` 才會定時運作。
 
-排程會在臺灣時間週一至週五的上課時段每五分鐘檢查一次，並利用 Firestore 紀錄避免同一節課重複通知。
+排程會依臺灣時間定期檢查，並利用 Firestore 紀錄避免同一提醒重複通知：
+
+- 平日上課前 10 分鐘：課程提醒。
+- 作業到期前一天 20:00：明天到期提醒。
+- 作業到期當天 07:00：今天到期提醒。
+- 每天 08:00：所有「學測」類型考試的每日倒數提醒。
+- 已完成的作業不會發送通知。
 
 ## 4. 在 iPhone 訂閱
 

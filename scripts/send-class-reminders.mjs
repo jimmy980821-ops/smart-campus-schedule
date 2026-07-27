@@ -1,4 +1,9 @@
 import { createSign } from "node:crypto";
+import {
+  getAssignmentReminders,
+  getClassReminder,
+  getExamReminders
+} from "./reminder-logic.mjs";
 
 const PROJECT_ID = "campus-flow-9965c";
 const SITE_URL = "https://jimmy980821-ops.github.io/smart-campus-schedule/";
@@ -24,47 +29,59 @@ const schedule = {
 
 const isTest = process.env.SEND_TEST === "true";
 const reminderTime = process.env.NOW ? new Date(process.env.NOW) : new Date();
-const reminder = isTest ? createTestReminder() : getScheduledReminder(reminderTime);
-
-if (!reminder) {
-  console.log("目前沒有需要發送的課程提醒。");
-  process.exit(0);
-}
-
-if (process.env.DRY_RUN === "true") {
-  console.log(JSON.stringify(reminder));
-  process.exit(0);
-}
 
 const serviceAccount = parseServiceAccount();
 const accessToken = await createAccessToken(serviceAccount);
-
-if (!isTest && await notificationWasSent(reminder.key, accessToken)) {
-  console.log(`提醒 ${reminder.key} 已發送，略過重複執行。`);
-  process.exit(0);
-}
-
 const devices = await listPushDevices(accessToken);
 if (!devices.length) {
   console.log("目前沒有已訂閱背景通知的裝置。");
   process.exit(0);
 }
 
+const reminderGroups = isTest
+  ? [{ reminder: createTestReminder(), devices }]
+  : await createScheduledReminderGroups(reminderTime, devices, accessToken);
+
+if (!reminderGroups.length) {
+  console.log("目前沒有需要發送的課程、作業或考試提醒。");
+  process.exit(0);
+}
+
+if (process.env.DRY_RUN === "true") {
+  console.log(JSON.stringify(reminderGroups.map(({ reminder, devices: targets }) => ({
+    ...reminder,
+    targetCount: targets.length
+  })), null, 2));
+  process.exit(0);
+}
+
 let successCount = 0;
-for (const device of devices) {
-  const result = await sendMessage(device.token, reminder, accessToken);
-  if (result.ok) {
-    successCount += 1;
-  } else if (result.invalidToken) {
-    await deletePushDevice(device.id, accessToken);
+let targetCount = 0;
+for (const group of reminderGroups) {
+  const { reminder, devices: targetDevices } = group;
+  if (!isTest && await notificationWasSent(reminder.key, accessToken)) {
+    console.log(`提醒 ${reminder.key} 已發送，略過重複執行。`);
+    continue;
+  }
+
+  let reminderSuccessCount = 0;
+  targetCount += targetDevices.length;
+  for (const device of targetDevices) {
+    const result = await sendMessage(device.token, reminder, accessToken);
+    if (result.ok) {
+      reminderSuccessCount += 1;
+      successCount += 1;
+    } else if (result.invalidToken) {
+      await deletePushDevice(device.id, accessToken);
+    }
+  }
+
+  if (!isTest && reminderSuccessCount > 0) {
+    await markNotificationSent(reminder, reminderSuccessCount, accessToken);
   }
 }
 
-if (!isTest && successCount > 0) {
-  await markNotificationSent(reminder, successCount, accessToken);
-}
-
-console.log(`通知完成：成功 ${successCount} 台，共 ${devices.length} 台裝置。`);
+console.log(`通知完成：成功 ${successCount} 則，共 ${targetCount} 個發送目標。`);
 
 function parseServiceAccount() {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
@@ -102,49 +119,41 @@ async function createAccessToken(account) {
   return (await response.json()).access_token;
 }
 
-function getScheduledReminder(date) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Taipei",
-      weekday: "short",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      hourCycle: "h23"
-    }).formatToParts(date).filter((part) => part.type !== "literal").map((part) => [part.type, part.value])
-  );
-
-  const dayMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 };
-  const weekday = dayMap[parts.weekday];
-  if (!weekday) return null;
-
-  const currentMinutes = Number(parts.hour) * 60 + Number(parts.minute);
-  const period = periodTimes.find((item) => {
-    const [hour, minute] = item.start.split(":").map(Number);
-    const minutesUntil = hour * 60 + minute - currentMinutes;
-    return minutesUntil > 0 && minutesUntil <= 10;
-  });
-  if (!period) return null;
-
-  const subject = schedule[weekday][period.period - 1];
-  const dateKey = `${parts.year}-${parts.month}-${parts.day}`;
-  return {
-    key: `${dateKey}-period-${period.period}`,
-    title: `準備上課：${subject}`,
-    body: `${period.start} 在 305 教室上課，請準備課本與用品。`,
-    tag: `${dateKey}-${period.period}`
-  };
-}
-
 function createTestReminder() {
   return {
     key: `test-${Date.now()}`,
     title: "校園日程測試通知",
-    body: "背景推播設定成功！之後會在上課前提醒你。",
+    body: "背景推播設定成功！之後會提醒課程、作業與學測倒數。",
     tag: "campus-flow-test"
   };
+}
+
+async function createScheduledReminderGroups(date, devices, token) {
+  const groups = [];
+  const classReminder = getClassReminder(date, periodTimes, schedule);
+  if (classReminder) groups.push({ reminder: classReminder, devices });
+
+  const devicesByUser = new Map();
+  for (const device of devices) {
+    if (!device.uid) continue;
+    const userDevices = devicesByUser.get(device.uid) || [];
+    userDevices.push(device);
+    devicesByUser.set(device.uid, userDevices);
+  }
+
+  for (const [uid, userDevices] of devicesByUser) {
+    const [assignments, exams] = await Promise.all([
+      listUserRecords(uid, "assignments", token),
+      listUserRecords(uid, "exams", token)
+    ]);
+    const personalReminders = [
+      ...getAssignmentReminders(date, assignments, uid),
+      ...getExamReminders(date, exams, uid)
+    ];
+    personalReminders.forEach((reminder) => groups.push({ reminder, devices: userDevices }));
+  }
+
+  return groups;
 }
 
 async function listPushDevices(token) {
@@ -159,11 +168,54 @@ async function listPushDevices(token) {
     const data = await response.json();
     for (const document of data.documents || []) {
       const pushToken = document.fields?.token?.stringValue;
-      if (pushToken) devices.push({ id: document.name.split("/").pop(), token: pushToken });
+      const uid = document.fields?.uid?.stringValue;
+      if (pushToken) devices.push({ id: document.name.split("/").pop(), token: pushToken, uid });
     }
     pageToken = data.nextPageToken || "";
   } while (pageToken);
   return devices;
+}
+
+async function listUserRecords(uid, collectionName, token) {
+  const records = [];
+  let pageToken = "";
+  do {
+    const url = new URL(
+      `${FIRESTORE_ROOT}/users/${encodeURIComponent(uid)}/${encodeURIComponent(collectionName)}`
+    );
+    url.searchParams.set("pageSize", "300");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const response = await authorizedFetch(url, token);
+    if (response.status === 404) return records;
+    if (!response.ok) {
+      throw new Error(`讀取 ${collectionName} 失敗：${response.status}`);
+    }
+    const data = await response.json();
+    for (const document of data.documents || []) {
+      records.push({
+        id: document.name.split("/").pop(),
+        ...decodeFirestoreFields(document.fields || {})
+      });
+    }
+    pageToken = data.nextPageToken || "";
+  } while (pageToken);
+  return records;
+}
+
+function decodeFirestoreFields(fields) {
+  return Object.fromEntries(
+    Object.entries(fields).map(([key, value]) => [key, decodeFirestoreValue(value)])
+  );
+}
+
+function decodeFirestoreValue(value) {
+  if ("stringValue" in value) return value.stringValue;
+  if ("booleanValue" in value) return value.booleanValue;
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("doubleValue" in value) return value.doubleValue;
+  if ("timestampValue" in value) return value.timestampValue;
+  if ("nullValue" in value) return null;
+  return undefined;
 }
 
 async function sendMessage(deviceToken, reminder, token) {
