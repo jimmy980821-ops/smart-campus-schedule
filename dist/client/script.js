@@ -1,4 +1,37 @@
-"use strict";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
+import {
+  getAuth,
+  GoogleAuthProvider,
+  onAuthStateChanged,
+  signInWithPopup,
+  signOut
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  getFirestore,
+  onSnapshot,
+  setDoc,
+  writeBatch
+} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
+
+// Firebase 公開的網站設定。這些識別資料不是密碼；資料安全由 Firestore 規則控管。
+const firebaseConfig = {
+  apiKey: "AIzaSyBU4gvnt7fVHwkRbqbJ-hBBlmZrP0MgKY4",
+  authDomain: "campus-flow-9965c.firebaseapp.com",
+  projectId: "campus-flow-9965c",
+  storageBucket: "campus-flow-9965c.firebasestorage.app",
+  messagingSenderId: "706339405367",
+  appId: "1:706339405367:web:6368418b712f0c613109b2",
+  measurementId: "G-MF082FK8VZ"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const database = getFirestore(firebaseApp);
+const googleProvider = new GoogleAuthProvider();
 
 /* =========================================================
    課表資料集中區：日後只要修改此區即可調整時間與課程
@@ -85,6 +118,8 @@ let exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
 let notificationTimer = null;
 let toastTimer = null;
 let notifiedCourseKey = "";
+let currentUser = null;
+let cloudUnsubscribers = [];
 
 const elements = {
   todayDate: document.querySelector("#today-date"),
@@ -99,6 +134,8 @@ const elements = {
   reminderText: document.querySelector("#reminder-text"),
   notificationButton: document.querySelector("#notification-button"),
   notificationMessage: document.querySelector("#notification-message"),
+  authButton: document.querySelector("#auth-button"),
+  authStatus: document.querySelector("#auth-status"),
   scheduleBody: document.querySelector("#schedule-body"),
   assignmentSummary: document.querySelector("#assignment-summary"),
   assignmentList: document.querySelector("#assignment-list"),
@@ -124,6 +161,7 @@ function init() {
   updateLiveCourseState();
   bindEvents();
   setDefaultFormDates();
+  initializeCloudSync();
   notificationTimer = window.setInterval(updateLiveCourseState, 30000);
 }
 
@@ -133,6 +171,7 @@ function bindEvents() {
   elements.assignmentForm.addEventListener("submit", saveAssignment);
   elements.examForm.addEventListener("submit", saveExam);
   elements.notificationButton.addEventListener("click", requestNotificationPermission);
+  elements.authButton.addEventListener("click", handleAuthButton);
   elements.menuButton.addEventListener("click", toggleMenu);
 
   elements.navLinks.addEventListener("click", (event) => {
@@ -151,7 +190,152 @@ function bindEvents() {
 
   window.addEventListener("beforeunload", () => {
     if (notificationTimer) window.clearInterval(notificationTimer);
+    stopCloudListeners();
   });
+}
+
+/* ====================== Firebase 登入與跨裝置同步 ====================== */
+
+function initializeCloudSync() {
+  onAuthStateChanged(auth, async (user) => {
+    stopCloudListeners();
+    currentUser = user;
+    updateAuthInterface();
+
+    if (!user) {
+      assignments = loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments());
+      exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
+      renderAssignments();
+      renderExams();
+      return;
+    }
+
+    setSyncStatus("正在同步雲端資料…");
+    try {
+      await migrateLocalDataToCloud(user.uid);
+      startCloudListeners(user.uid);
+    } catch (error) {
+      handleCloudError(error);
+    }
+  });
+}
+
+async function handleAuthButton() {
+  elements.authButton.disabled = true;
+  try {
+    if (currentUser) {
+      await signOut(auth);
+      showToast("已登出，改用本機資料");
+    } else {
+      await signInWithPopup(auth, googleProvider);
+      showToast("登入成功，開始同步");
+    }
+  } catch (error) {
+    const cancelled = ["auth/popup-closed-by-user", "auth/cancelled-popup-request"].includes(error.code);
+    if (!cancelled) {
+      setSyncStatus("登入失敗，請確認 Firebase 已啟用 Google 登入");
+      showToast("Google 登入未完成");
+      console.error("Firebase authentication failed:", error);
+    }
+  } finally {
+    elements.authButton.disabled = false;
+  }
+}
+
+function updateAuthInterface() {
+  if (currentUser) {
+    const displayName = currentUser.displayName || currentUser.email || "已登入";
+    elements.authButton.textContent = "登出";
+    elements.authButton.setAttribute("aria-label", `登出 ${displayName}`);
+    setSyncStatus(`${displayName}・雲端同步中`, true);
+  } else {
+    elements.authButton.textContent = "Google 登入同步";
+    elements.authButton.setAttribute("aria-label", "使用 Google 帳號登入並同步資料");
+    setSyncStatus("目前儲存在這台裝置");
+  }
+}
+
+function setSyncStatus(message, isSynced = false) {
+  elements.authStatus.textContent = message;
+  elements.authStatus.classList.toggle("is-synced", isSynced);
+}
+
+async function migrateLocalDataToCloud(userId) {
+  await Promise.all([
+    uploadLocalCollectionWhenCloudIsEmpty(userId, "assignments", assignments),
+    uploadLocalCollectionWhenCloudIsEmpty(userId, "exams", exams)
+  ]);
+}
+
+async function uploadLocalCollectionWhenCloudIsEmpty(userId, collectionName, items) {
+  const cloudCollection = collection(database, "users", userId, collectionName);
+  const snapshot = await getDocs(cloudCollection);
+  if (!snapshot.empty || !items.length) return;
+
+  const batch = writeBatch(database);
+  items.forEach((item) => {
+    batch.set(doc(cloudCollection, item.id), { ...item, updatedAt: Date.now() });
+  });
+  await batch.commit();
+}
+
+function startCloudListeners(userId) {
+  const subscribe = (collectionName, applyItems) => onSnapshot(
+    collection(database, "users", userId, collectionName),
+    (snapshot) => {
+      const items = snapshot.docs.map((itemDocument) => ({
+        ...itemDocument.data(),
+        id: itemDocument.id
+      }));
+      applyItems(items);
+      setSyncStatus(`${currentUser?.displayName || "已登入"}・資料已同步`, true);
+    },
+    handleCloudError
+  );
+
+  cloudUnsubscribers = [
+    subscribe("assignments", (items) => {
+      assignments = items;
+      saveStorage(STORAGE_KEYS.assignments, assignments);
+      renderAssignments();
+    }),
+    subscribe("exams", (items) => {
+      exams = items;
+      saveStorage(STORAGE_KEYS.exams, exams);
+      renderExams();
+    })
+  ];
+}
+
+function stopCloudListeners() {
+  cloudUnsubscribers.forEach((unsubscribe) => unsubscribe());
+  cloudUnsubscribers = [];
+}
+
+async function syncCloudRecord(collectionName, item) {
+  if (!currentUser) return;
+  try {
+    await setDoc(
+      doc(database, "users", currentUser.uid, collectionName, item.id),
+      { ...item, updatedAt: Date.now() }
+    );
+  } catch (error) {
+    handleCloudError(error);
+  }
+}
+
+async function deleteCloudRecord(collectionName, id) {
+  if (!currentUser) return;
+  try {
+    await deleteDoc(doc(database, "users", currentUser.uid, collectionName, id));
+  } catch (error) {
+    handleCloudError(error);
+  }
+}
+
+function handleCloudError(error) {
+  setSyncStatus("雲端同步暫時失敗，資料仍保存在本機");
+  console.error("Firebase sync failed:", error);
 }
 
 function updateLiveCourseState() {
@@ -364,7 +548,7 @@ function openAssignmentModal(item = null) {
   elements.assignmentModal.showModal();
 }
 
-function saveAssignment(event) {
+async function saveAssignment(event) {
   event.preventDefault();
   const id = document.querySelector("#assignment-id").value;
   const subject = document.querySelector("#assignment-subject").value;
@@ -383,20 +567,24 @@ function saveAssignment(event) {
   }
   if (!valid) return;
 
+  let savedAssignment;
   if (id) {
     assignments = assignments.map((item) => item.id === id ? { ...item, subject, content, dueDate } : item);
+    savedAssignment = assignments.find((item) => item.id === id);
     showToast("資料已更新");
   } else {
-    assignments.push({ id: createId(), subject, content, dueDate, completed: false });
+    savedAssignment = { id: createId(), subject, content, dueDate, completed: false };
+    assignments.push(savedAssignment);
     showToast("作業新增成功");
   }
 
   saveStorage(STORAGE_KEYS.assignments, assignments);
   renderAssignments();
   elements.assignmentModal.close();
+  await syncCloudRecord("assignments", savedAssignment);
 }
 
-function handleAssignmentAction(action, id) {
+async function handleAssignmentAction(action, id) {
   const item = assignments.find((assignment) => assignment.id === id);
   if (!item) return;
 
@@ -407,11 +595,13 @@ function handleAssignmentAction(action, id) {
     saveStorage(STORAGE_KEYS.assignments, assignments);
     renderAssignments();
     showToast(item.completed ? "作業已完成" : "已改為未完成");
+    await syncCloudRecord("assignments", item);
   } else if (action === "delete" && window.confirm(`確定要刪除「${item.content}」嗎？此操作無法復原。`)) {
     assignments = assignments.filter((assignment) => assignment.id !== id);
     saveStorage(STORAGE_KEYS.assignments, assignments);
     renderAssignments();
     showToast("作業已刪除");
+    await deleteCloudRecord("assignments", id);
   }
 }
 
@@ -457,7 +647,7 @@ function openExamModal(item = null) {
   elements.examModal.showModal();
 }
 
-function saveExam(event) {
+async function saveExam(event) {
   event.preventDefault();
   const id = document.querySelector("#exam-id").value;
   const type = document.querySelector("#exam-type").value;
@@ -476,20 +666,24 @@ function saveExam(event) {
   }
   if (!valid) return;
 
+  let savedExam;
   if (id) {
     exams = exams.map((item) => item.id === id ? { ...item, type, name, date } : item);
+    savedExam = exams.find((item) => item.id === id);
     showToast("資料已更新");
   } else {
-    exams.push({ id: createId(), type, name, date });
+    savedExam = { id: createId(), type, name, date };
+    exams.push(savedExam);
     showToast("考試新增成功");
   }
 
   saveStorage(STORAGE_KEYS.exams, exams);
   renderExams();
   elements.examModal.close();
+  await syncCloudRecord("exams", savedExam);
 }
 
-function handleExamAction(action, id) {
+async function handleExamAction(action, id) {
   const item = exams.find((exam) => exam.id === id);
   if (!item) return;
   if (action === "edit") {
@@ -499,6 +693,7 @@ function handleExamAction(action, id) {
     saveStorage(STORAGE_KEYS.exams, exams);
     renderExams();
     showToast("考試已刪除");
+    await deleteCloudRecord("exams", id);
   }
 }
 

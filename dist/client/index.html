@@ -42,9 +42,15 @@
               <h1 id="today-title">今天，一步一步完成。</h1>
               <p class="hero-copy">把課程、作業與考試放在同一個清楚的畫面，專注做好眼前的事。</p>
             </div>
-            <button class="button button-light" id="notification-button" type="button" aria-label="開啟課程瀏覽器通知">
-              <span aria-hidden="true">◉</span> 開啟課程通知
-            </button>
+            <div class="hero-actions">
+              <button class="button button-light" id="notification-button" type="button" aria-label="開啟課程瀏覽器通知">
+                <span aria-hidden="true">◉</span> 開啟課程通知
+              </button>
+              <button class="button button-primary" id="auth-button" type="button" aria-label="使用 Google 帳號登入並同步資料">
+                Google 登入同步
+              </button>
+              <p class="sync-status" id="auth-status" role="status" aria-live="polite">目前儲存在這台裝置</p>
+            </div>
           </div>
 
           <div class="today-layout">
@@ -229,6 +235,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="script.js" defer></script>
+    <script type="module" src="script.js"></script>
   </body>
 </html>

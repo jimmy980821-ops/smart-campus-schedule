@@ -184,6 +184,29 @@ button {
   margin-bottom: 36px;
 }
 
+.hero-actions {
+  display: grid;
+  min-width: 190px;
+  gap: 10px;
+}
+
+.hero-actions .button {
+  width: 100%;
+}
+
+.sync-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.sync-status.is-synced {
+  color: #24704e;
+  font-weight: 800;
+}
+
 .eyebrow,
 .section-kicker {
   margin: 0 0 7px;
@@ -1008,10 +1031,20 @@ h2 {
     display: block;
   }
 
+  .hero-actions,
   .hero-heading .button,
   .section-heading .button {
     width: 100%;
     margin-top: 19px;
+  }
+
+  .hero-actions {
+    gap: 10px;
+  }
+
+  .hero-actions .button,
+  .hero-actions .sync-status {
+    margin-top: 0;
   }
 
   .hero-copy {
