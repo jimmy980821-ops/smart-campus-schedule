@@ -150,7 +150,14 @@ const elements = {
   assignmentSummary: document.querySelector("#assignment-summary"),
   assignmentList: document.querySelector("#assignment-list"),
   examList: document.querySelector("#exam-list"),
-  analysis: document.querySelector("#free-period-analysis"),
+  learningOverview: document.querySelector("#learning-overview-grid"),
+  gsatCard: document.querySelector("#gsat-home-card"),
+  gsatTitle: document.querySelector("#gsat-home-title"),
+  gsatDate: document.querySelector("#gsat-home-date"),
+  gsatDays: document.querySelector("#gsat-home-days"),
+  gsatUnit: document.querySelector("#gsat-home-unit"),
+  gsatMessage: document.querySelector("#gsat-home-message"),
+  gsatManageButton: document.querySelector("#gsat-manage-button"),
   assignmentModal: document.querySelector("#assignment-modal"),
   assignmentForm: document.querySelector("#assignment-form"),
   examModal: document.querySelector("#exam-modal"),
@@ -189,6 +196,7 @@ function bindEvents() {
   elements.notificationButton.addEventListener("click", enableBackgroundNotifications);
   elements.authButton.addEventListener("click", handleAuthButton);
   elements.themeButton.addEventListener("click", toggleTheme);
+  elements.gsatManageButton.addEventListener("click", openGsatExamModal);
   elements.menuButton.addEventListener("click", toggleMenu);
 
   elements.navLinks.addEventListener("click", (event) => {
@@ -556,7 +564,7 @@ function updateLiveCourseState() {
   elements.todayDate.textContent = `${shortDateFormatter.format(now)} · ${getDailyGreeting(now)}`;
   renderTodayCourses(todayCourses, liveState);
   renderNextCourse(liveState);
-  renderFreePeriodAnalysis(todayCourses, day);
+  renderLearningOverview();
   renderSchedule(liveState);
   maybeSendClassNotification(liveState);
 }
@@ -716,6 +724,7 @@ function renderAssignments() {
     ["已逾期", counts.overdue],
     ["已完成", counts.completed]
   ].map(([label, value]) => `<div class="summary-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  renderLearningOverview();
 
   if (!sorted.length) {
     elements.assignmentList.innerHTML = `<div class="empty-state">目前沒有作業。新增一項，開始規劃吧！</div>`;
@@ -816,6 +825,8 @@ async function handleAssignmentAction(action, id) {
 
 function renderExams() {
   const sorted = [...exams].sort((a, b) => parseDate(a.date) - parseDate(b.date));
+  renderGsatCountdown();
+  renderLearningOverview();
   if (!sorted.length) {
     elements.examList.innerHTML = `<div class="empty-state">目前沒有考試。新增重要日期，讓準備更從容。</div>`;
     return;
@@ -843,6 +854,51 @@ function renderExams() {
   elements.examList.querySelectorAll("button[data-action]").forEach((button) => {
     button.addEventListener("click", () => handleExamAction(button.dataset.action, button.dataset.id));
   });
+}
+
+function renderGsatCountdown() {
+  const gsat = getUpcomingGsat();
+  elements.gsatCard.classList.toggle("is-empty", !gsat);
+  elements.gsatCard.classList.remove("is-today");
+
+  if (!gsat) {
+    elements.gsatTitle.textContent = "尚未設定學測日期";
+    elements.gsatDate.textContent = "請在考試管理新增一筆「學測」類型的考試。";
+    elements.gsatDays.textContent = "—";
+    elements.gsatUnit.textContent = "";
+    elements.gsatMessage.textContent = "設定日期後，首頁與每日通知都會自動開始倒數。";
+    elements.gsatManageButton.textContent = "設定學測日期";
+    return;
+  }
+
+  const days = daysBetweenToday(gsat.date);
+  elements.gsatTitle.textContent = gsat.name;
+  elements.gsatDate.textContent = fullDateFormatter.format(parseDate(gsat.date));
+  elements.gsatDays.textContent = days === 0 ? "今天" : String(days);
+  elements.gsatUnit.textContent = days === 0 ? "" : "天";
+  elements.gsatMessage.textContent = days === 0
+    ? "沉著應試，相信一路累積的準備。"
+    : "每天完成一個小目標，穩定靠近理想校系。";
+  elements.gsatManageButton.textContent = "調整學測日期";
+  elements.gsatCard.classList.toggle("is-today", days === 0);
+}
+
+function getUpcomingGsat() {
+  return exams
+    .filter((exam) => exam.type === "學測" && daysBetweenToday(exam.date) >= 0)
+    .sort((a, b) => parseDate(a.date) - parseDate(b.date))[0] || null;
+}
+
+function openGsatExamModal() {
+  const gsat = getUpcomingGsat();
+  if (gsat) {
+    openExamModal(gsat);
+    return;
+  }
+
+  openExamModal();
+  document.querySelector("#exam-type").value = "學測";
+  document.querySelector("#exam-name").value = "學科能力測驗";
 }
 
 function openExamModal(item = null) {
@@ -906,43 +962,37 @@ async function handleExamAction(action, id) {
   }
 }
 
-function renderFreePeriodAnalysis(courses, day) {
-  if (day === 0 || day === 6) {
-    elements.analysis.innerHTML = createAnalysisCards([
-      ["休", "今日課程", "0 節"],
-      ["空", "空堂時段", "今日為週末"],
-      ["長", "最長空堂", "不適用"],
-      ["學", "讀書建議", "安排 45 分鐘複習"]
-    ]);
-    return;
-  }
+function renderLearningOverview() {
+  const pendingAssignments = assignments.filter((item) => !item.completed);
+  const dueWithinSevenDays = pendingAssignments.filter((item) => {
+    const days = daysBetweenToday(item.dueDate);
+    return days >= 0 && days <= 7;
+  });
+  const upcomingExam = exams
+    .filter((exam) => daysBetweenToday(exam.date) >= 0)
+    .sort((a, b) => parseDate(a.date) - parseDate(b.date))[0];
+  const completedCount = assignments.filter((item) => item.completed).length;
+  const completionRate = assignments.length
+    ? Math.round((completedCount / assignments.length) * 100)
+    : 0;
+  const examLabel = upcomingExam
+    ? `${upcomingExam.name}・${daysBetweenToday(upcomingExam.date)} 天`
+    : "尚未設定";
 
-  const occupied = courses.map((course) => course.period);
-  const first = Math.min(...occupied);
-  const last = Math.max(...occupied);
-  const freePeriods = periodTimes
-    .map((time) => time.period)
-    .filter((period) => period >= first && period <= last && !occupied.includes(period));
-  const longest = getLongestConsecutiveRun(freePeriods);
-  const freeLabel = freePeriods.length ? freePeriods.map((period) => `第 ${period} 節`).join("、") : "沒有空堂";
-  const suggestion = freePeriods.length
-    ? `可安排約 ${freePeriods.length * 40} 分鐘`
-    : "今日課程較為集中";
-
-  elements.analysis.innerHTML = createAnalysisCards([
-    ["課", "今日課程", `${courses.length} 節`],
-    ["空", "空堂時段", freeLabel],
-    ["長", "最長空堂", `${longest} 節`],
-    ["學", "讀書建議", suggestion]
+  elements.learningOverview.innerHTML = createAnalysisCards([
+    ["待", "待完成作業", `${pendingAssignments.length} 項`],
+    ["近", "七日內到期", `${dueWithinSevenDays.length} 項`],
+    ["考", "最近考試", examLabel],
+    ["成", "作業完成率", `${completionRate}%`]
   ]);
 }
 
 function createAnalysisCards(items) {
   return items.map(([icon, label, value]) => `
     <article class="analysis-card">
-      <span class="analysis-icon" aria-hidden="true">${icon}</span>
-      <span>${label}</span>
-      <strong>${value}</strong>
+      <span class="analysis-icon" aria-hidden="true">${escapeHtml(String(icon))}</span>
+      <span>${escapeHtml(String(label))}</span>
+      <strong>${escapeHtml(String(value))}</strong>
     </article>`).join("");
 }
 
@@ -1028,17 +1078,6 @@ function toDateInput(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-function getLongestConsecutiveRun(numbers) {
-  if (!numbers.length) return 0;
-  let longest = 1;
-  let current = 1;
-  for (let index = 1; index < numbers.length; index += 1) {
-    current = numbers[index] === numbers[index - 1] + 1 ? current + 1 : 1;
-    longest = Math.max(longest, current);
-  }
-  return longest;
 }
 
 function formatMinutes(minutes) {
