@@ -191,14 +191,7 @@ html[data-theme="dark"] .site-header {
 }
 
 .theme-toggle-icon {
-  display: grid;
-  width: 24px;
-  height: 24px;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--surface);
-  font-size: 0.78rem;
-  font-weight: 900;
+  font-size: 1.18rem;
   line-height: 1;
 }
 
