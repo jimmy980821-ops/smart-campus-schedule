@@ -240,7 +240,7 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = isDark ? "dark" : "light";
   elements.themeButton.setAttribute("aria-pressed", String(isDark));
   elements.themeButton.setAttribute("aria-label", isDark ? "切換為白天模式" : "切換為黑夜模式");
-  elements.themeIcon.textContent = isDark ? "☾" : "☀";
+  elements.themeIcon.textContent = isDark ? "夜" : "日";
   elements.themeLabel.textContent = isDark ? "黑夜" : "白天";
   elements.themeColorMeta.setAttribute("content", isDark ? "#0d1524" : "#f4f7fb");
 }
