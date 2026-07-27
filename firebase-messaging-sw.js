@@ -1,6 +1,6 @@
 /* global firebase */
 
-const CACHE_NAME = "campus-flow-v7";
+const CACHE_NAME = "campus-flow-v8";
 const APP_FILES = [
   "./",
   "./index.html",
