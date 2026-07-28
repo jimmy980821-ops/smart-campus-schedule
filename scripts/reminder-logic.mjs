@@ -1,5 +1,7 @@
 const TAIPEI_TIME_ZONE = "Asia/Taipei";
 const FIXED_TIME_WINDOW_MINUTES = 10;
+const EXAM_REMINDER_START_MINUTES = 8 * 60;
+const EXAM_REMINDER_END_MINUTES = 12 * 60;
 
 export function getTaipeiClock(date) {
   const parts = Object.fromEntries(
@@ -85,7 +87,12 @@ export function getAssignmentReminders(date, assignments, uid) {
 
 export function getExamReminders(date, exams, uid) {
   const clock = getTaipeiClock(date);
-  if (!isWithinTimeWindow(clock.currentMinutes, 8 * 60)) return [];
+  // GitHub Actions 的排程可能延遲；上午第一次成功執行時補發，
+  // 再由每日通知紀錄的相同 key 避免重複推播。
+  if (
+    clock.currentMinutes < EXAM_REMINDER_START_MINUTES
+    || clock.currentMinutes >= EXAM_REMINDER_END_MINUTES
+  ) return [];
 
   return exams.flatMap((exam) => {
     if (exam.type !== "學測" || !isDateKey(exam.date)) return [];
