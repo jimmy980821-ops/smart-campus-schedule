@@ -65,6 +65,37 @@ test("學測每天早上 8 點顯示正確倒數", () => {
   assert.equal(reminders[0].title, "學測倒數 3 天");
 });
 
+test("學測排程延遲到上午 9 點仍會補發", () => {
+  const reminders = getExamReminders(
+    new Date("2026-07-27T01:25:00Z"),
+    [{
+      id: "e1",
+      type: "學測",
+      name: "學科能力測驗",
+      date: "2026-07-30"
+    }],
+    "user-1"
+  );
+
+  assert.equal(reminders.length, 1);
+  assert.equal(reminders[0].key, "exam-user-1-e1-2026-07-27-countdown");
+});
+
+test("學測中午後不再補發", () => {
+  const reminders = getExamReminders(
+    new Date("2026-07-27T04:00:00Z"),
+    [{
+      id: "e1",
+      type: "學測",
+      name: "學科能力測驗",
+      date: "2026-07-30"
+    }],
+    "user-1"
+  );
+
+  assert.equal(reminders.length, 0);
+});
+
 test("非學測類型不發送每日倒數", () => {
   const reminders = getExamReminders(
     new Date("2026-07-27T00:00:00Z"),
