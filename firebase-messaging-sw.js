@@ -1,11 +1,11 @@
 /* global firebase */
 
-const CACHE_NAME = "campus-flow-v9";
+const CACHE_NAME = "campus-flow-v10";
 const APP_FILES = [
   "./",
   "./index.html",
-  "./style.css",
-  "./script.js",
+  "./style.css?v=10",
+  "./script.js?v=10",
   "./site.webmanifest",
   "./app-icon.png"
 ];
@@ -61,6 +61,24 @@ self.addEventListener("fetch", (event) => {
 
   if (event.request.mode === "navigate") {
     event.respondWith(fetch(event.request).catch(() => caches.match("./index.html")));
+    return;
+  }
+
+  // 程式與樣式採網路優先，避免新版頁面搭配到舊版 JavaScript。
+  const requestUrl = new URL(event.request.url);
+  const isVersionSensitiveAsset = [".js", ".css", ".html", ".webmanifest"]
+    .some((extension) => requestUrl.pathname.endsWith(extension));
+
+  if (isVersionSensitiveAsset) {
+    event.respondWith(
+      fetch(event.request)
+        .then(async (response) => {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(event.request, response.clone());
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
     return;
   }
 
