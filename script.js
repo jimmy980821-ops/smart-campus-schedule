@@ -134,7 +134,7 @@ const deviceDateTimeFormatter = new Intl.DateTimeFormat("zh-TW", {
   minute: "2-digit"
 });
 
-let weeklySchedule = normalizeSchedule(loadStorage(STORAGE_KEYS.schedule, defaultWeeklySchedule));
+let weeklySchedule = normalizeSchedule(loadStorage(STORAGE_KEYS.schedule, createEmptySchedule()));
 let assignments = removeExpiredCompletedAssignments(loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments()));
 let exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
 let pushDevices = [];
@@ -163,7 +163,10 @@ const elements = {
   notificationMessage: document.querySelector("#notification-message"),
   authButton: document.querySelector("#auth-button"),
   authStatus: document.querySelector("#auth-status"),
+  loginGuideModal: document.querySelector("#login-guide-modal"),
+  loginGuideContinue: document.querySelector("#login-guide-continue"),
   scheduleBody: document.querySelector("#schedule-body"),
+  importSampleScheduleButton: document.querySelector("#import-sample-schedule"),
   assignmentSummary: document.querySelector("#assignment-summary"),
   assignmentList: document.querySelector("#assignment-list"),
   examList: document.querySelector("#exam-list"),
@@ -232,6 +235,8 @@ function bindEvents() {
   elements.refreshDeviceButton.addEventListener("click", refreshCurrentDevice);
   elements.deviceList.addEventListener("click", handleDeviceAction);
   elements.authButton.addEventListener("click", handleAuthButton);
+  elements.loginGuideContinue.addEventListener("click", signInWithGoogle);
+  elements.importSampleScheduleButton.addEventListener("click", importSampleSchedule);
   elements.themeButton.addEventListener("click", toggleTheme);
   elements.gsatManageButton.addEventListener("click", openGsatExamModal);
   elements.menuButton.addEventListener("click", toggleMenu);
@@ -267,43 +272,48 @@ function bindEvents() {
 /* ====================== 白天／黑夜模式 ====================== */
 
 function initializeTheme() {
-  const savedTheme = getSavedTheme();
-  const systemTheme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-  applyTheme(savedTheme || systemTheme);
+  applyTheme(getSavedTheme());
 
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
-    if (!getSavedTheme()) applyTheme(event.matches ? "dark" : "light");
+    if (getSavedTheme() === "system") applyTheme("system", event.matches ? "dark" : "light");
   });
 }
 
 function toggleTheme() {
-  const currentTheme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
-  const nextTheme = currentTheme === "dark" ? "light" : "dark";
+  const currentMode = getSavedTheme();
+  const nextMode = currentMode === "system" ? "light" : currentMode === "light" ? "dark" : "system";
   try {
-    localStorage.setItem(STORAGE_KEYS.theme, nextTheme);
+    localStorage.setItem(STORAGE_KEYS.theme, nextMode);
   } catch {
     // localStorage 無法使用時仍可在本次瀏覽中切換。
   }
-  applyTheme(nextTheme);
-  showToast(nextTheme === "dark" ? "已切換為黑夜模式" : "已切換為白天模式");
+  applyTheme(nextMode);
+  const labels = { system: "跟隨系統", light: "白天模式", dark: "黑夜模式" };
+  showToast(`已切換為${labels[nextMode]}`);
 }
 
-function applyTheme(theme) {
-  const isDark = theme === "dark";
+function applyTheme(mode, forcedSystemTheme = "") {
+  const systemTheme = forcedSystemTheme ||
+    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const resolvedTheme = mode === "system" ? systemTheme : mode;
+  const isDark = resolvedTheme === "dark";
+  const nextModes = { system: "白天", light: "黑夜", dark: "跟隨系統" };
+  const labels = { system: "系統", light: "白天", dark: "黑夜" };
+  const icons = { system: "◐", light: "☀", dark: "☾" };
   document.documentElement.dataset.theme = isDark ? "dark" : "light";
-  elements.themeButton.setAttribute("aria-pressed", String(isDark));
-  elements.themeButton.setAttribute("aria-label", isDark ? "切換為白天模式" : "切換為黑夜模式");
-  elements.themeIcon.textContent = isDark ? "☾" : "☀";
-  elements.themeLabel.textContent = isDark ? "黑夜" : "白天";
+  elements.themeButton.dataset.mode = mode;
+  elements.themeButton.setAttribute("aria-label", `目前${labels[mode]}模式，點擊切換為${nextModes[mode]}模式`);
+  elements.themeIcon.textContent = icons[mode];
+  elements.themeLabel.textContent = labels[mode];
   elements.themeColorMeta.setAttribute("content", isDark ? "#0d1524" : "#f4f7fb");
 }
 
 function getSavedTheme() {
   try {
     const savedTheme = localStorage.getItem(STORAGE_KEYS.theme);
-    return savedTheme === "dark" || savedTheme === "light" ? savedTheme : "";
+    return ["system", "dark", "light"].includes(savedTheme) ? savedTheme : "system";
   } catch {
-    return "";
+    return "system";
   }
 }
 
@@ -337,16 +347,31 @@ function initializeCloudSync() {
 }
 
 async function handleAuthButton() {
+  if (!currentUser) {
+    elements.loginGuideModal.showModal();
+    return;
+  }
+
   elements.authButton.disabled = true;
   try {
-    if (currentUser) {
       await removeCurrentPushDevice();
       await signOut(auth);
       showToast("已登出，改用本機資料");
-    } else {
-      await signInWithPopup(auth, googleProvider);
-      showToast("登入成功，開始同步");
-    }
+  } catch (error) {
+    setSyncStatus("登出暫時失敗，請稍後再試");
+    showToast("Google 登出未完成");
+    console.error("Firebase sign-out failed:", error);
+  } finally {
+    elements.authButton.disabled = false;
+  }
+}
+
+async function signInWithGoogle() {
+  elements.loginGuideContinue.disabled = true;
+  try {
+    await signInWithPopup(auth, googleProvider);
+    elements.loginGuideModal.close();
+    showToast("登入成功，開始同步");
   } catch (error) {
     const cancelled = ["auth/popup-closed-by-user", "auth/cancelled-popup-request"].includes(error.code);
     if (!cancelled) {
@@ -355,7 +380,7 @@ async function handleAuthButton() {
       console.error("Firebase authentication failed:", error);
     }
   } finally {
-    elements.authButton.disabled = false;
+    elements.loginGuideContinue.disabled = false;
   }
 }
 
@@ -368,7 +393,7 @@ function updateAuthInterface() {
   } else {
     elements.authButton.textContent = "Google 登入同步";
     elements.authButton.setAttribute("aria-label", "使用 Google 帳號登入並同步資料");
-    setSyncStatus("目前儲存在這台裝置");
+    setSyncStatus("登入後自動備份，換手機資料也不會不見");
   }
   renderDeviceManagement();
 }
@@ -908,12 +933,32 @@ function getLiveCourseState(now, todayCourses) {
 function renderTodayCourses(courses, liveState) {
   elements.todayCount.textContent = `${courses.length} 節課`;
 
-  if (!courses.length) {
-    elements.todayList.innerHTML = `<div class="empty-state">今日沒有課程，好好休息，也可以整理下週計畫。</div>`;
+  if (!hasAnyScheduleCourses()) {
+    elements.todayList.innerHTML = `
+      <div class="empty-state contextual-empty">
+        <strong>還沒有建立課表</strong>
+        <p>點選下方空堂新增第一堂課，或先套用範例課表看看。</p>
+        <button class="button button-primary" type="button" data-action="import-sample">匯入範例課表</button>
+      </div>`;
+    elements.todayList.querySelector("[data-action='import-sample']").addEventListener("click", importSampleSchedule);
     return;
   }
 
-  elements.todayList.innerHTML = courses.map((course) => {
+  if (!courses.length) {
+    elements.todayList.innerHTML = `
+      <div class="empty-state contextual-empty">
+        <strong>今天沒有安排課程</strong>
+        <p>今天可以休息一下，也可以整理作業與下一次考試。</p>
+      </div>`;
+    return;
+  }
+
+  const allCoursesFinished = !liveState.currentCourse && !liveState.nextCourse;
+  const finishedMessage = allCoursesFinished
+    ? `<div class="today-status-note"><strong>今天的課程已經結束囉，辛苦了！</strong></div>`
+    : "";
+
+  elements.todayList.innerHTML = finishedMessage + courses.map((course) => {
     const time = getPeriodTime(course.period);
     const isCurrent = liveState.currentCourse?.period === course.period;
     const isNext = liveState.nextCourse?.period === course.period;
@@ -935,6 +980,16 @@ function renderTodayCourses(courses, liveState) {
 function renderNextCourse(liveState) {
   const { now, currentCourse, nextCourse, minutesUntil } = liveState;
   const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+
+  if (!hasAnyScheduleCourses()) {
+    elements.nextStatus.textContent = "尚未建立課表";
+    elements.nextName.textContent = "先新增第一堂課";
+    elements.nextMeta.textContent = "也可以一鍵匯入範例課表";
+    elements.nextCountdown.textContent = "開始設定";
+    elements.nextCountdownLabel.textContent = "建立屬於你的每週節奏";
+    elements.reminderText.textContent = "課表建立後，這裡會顯示下一堂課與上課提醒。";
+    return;
+  }
 
   if (nextCourse) {
     const time = getPeriodTime(nextCourse.period);
@@ -968,6 +1023,7 @@ function renderNextCourse(liveState) {
 
 function renderSchedule(liveState = getLiveCourseState(new Date(), weeklySchedule[new Date().getDay()] || [])) {
   const currentDay = liveState.now.getDay();
+  elements.importSampleScheduleButton.hidden = hasAnyScheduleCourses();
 
   elements.scheduleBody.innerHTML = periodTimes.map((time) => {
     const cells = [1, 2, 3, 4, 5].map((day) => {
@@ -1012,6 +1068,25 @@ function renderSchedule(liveState = getLiveCourseState(new Date(), weeklySchedul
   elements.scheduleBody.querySelectorAll(".course-button").forEach((button) => {
     button.addEventListener("click", () => openCourseModal(Number(button.dataset.day), Number(button.dataset.period)));
   });
+}
+
+function hasAnyScheduleCourses() {
+  return Object.values(weeklySchedule).some((courses) => Array.isArray(courses) && courses.length > 0);
+}
+
+async function importSampleSchedule() {
+  if (hasAnyScheduleCourses()) {
+    showToast("目前已有課表，範例不會覆蓋現有資料");
+    return;
+  }
+  if (!window.confirm("要匯入範例課表嗎？之後仍可逐堂修改或刪除。")) return;
+
+  weeklySchedule = normalizeSchedule(defaultWeeklySchedule);
+  saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+  populateSubjectOptions();
+  updateLiveCourseState();
+  showToast("已匯入範例課表");
+  await syncSchedule();
 }
 
 function openCourseModal(day, period) {
@@ -1241,7 +1316,15 @@ function renderExams() {
     return;
   }
 
-  const examColors = { 段考: "#315fbc", 模擬考: "#7a59a5", 學測: "#d06b43", 其他考試: "#39816a" };
+  const examColors = {
+    段考: "#315fbc",
+    第一次段考: "#315fbc",
+    第二次段考: "#4b69b5",
+    第三次段考: "#5d6fa8",
+    模擬考: "#7a59a5",
+    學測: "#d06b43",
+    其他考試: "#39816a"
+  };
 
   elements.examList.innerHTML = sorted.map((exam) => {
     const days = daysBetweenToday(exam.date);
@@ -1315,7 +1398,8 @@ function openExamModal(item = null) {
   clearErrors("exam");
   document.querySelector("#exam-id").value = item?.id || "";
   document.querySelector("#exam-modal-title").textContent = item ? "編輯考試" : "新增考試";
-  document.querySelector("#exam-type").value = item?.type || "段考";
+  const selectedType = item?.type === "段考" ? "第一次段考" : item?.type;
+  document.querySelector("#exam-type").value = selectedType || "第一次段考";
   document.querySelector("#exam-name").value = item?.name || "";
   document.querySelector("#exam-date").value = item?.date || toDateInput(addDays(new Date(), 14));
   elements.examModal.showModal();
@@ -1440,7 +1524,7 @@ function populateSubjectOptions() {
 }
 
 function normalizeSchedule(value) {
-  const source = value && typeof value === "object" ? value : defaultWeeklySchedule;
+  const source = value && typeof value === "object" ? value : createEmptySchedule();
   return Object.fromEntries([1, 2, 3, 4, 5].map((day) => {
     const courses = Array.isArray(source[day]) ? source[day] : [];
     const normalizedCourses = courses
@@ -1537,11 +1621,19 @@ function loadStorage(key, fallback) {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : fallback;
+    if (Array.isArray(fallback)) return Array.isArray(parsed) ? parsed : fallback;
+    if (fallback && typeof fallback === "object") {
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : fallback;
+    }
+    return parsed ?? fallback;
   } catch (error) {
     console.warn(`讀取 ${key} 失敗，已使用預設資料。`, error);
     return fallback;
   }
+}
+
+function createEmptySchedule() {
+  return { 1: [], 2: [], 3: [], 4: [], 5: [] };
 }
 
 function saveStorage(key, value) {
@@ -1563,7 +1655,7 @@ function createDefaultAssignments() {
 
 function createDefaultExams() {
   return [
-    { id: "demo-e1", type: "段考", name: "第一次段考", date: toDateInput(addDays(new Date(), 18)) },
+    { id: "demo-e1", type: "第一次段考", name: "國文、英文與數學", date: toDateInput(addDays(new Date(), 18)) },
     { id: "demo-e2", type: "模擬考", name: "全校模擬考", date: toDateInput(addDays(new Date(), 42)) },
     { id: "demo-e3", type: "學測", name: "學科能力測驗", date: toDateInput(addDays(new Date(), 168)) }
   ];

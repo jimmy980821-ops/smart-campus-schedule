@@ -1,11 +1,11 @@
 /* global firebase */
 
-const CACHE_NAME = "campus-flow-v12";
+const CACHE_NAME = "campus-flow-v13";
 const APP_FILES = [
   "./",
   "./index.html",
-  "./style.css?v=12",
-  "./script.js?v=12",
+  "./style.css?v=13",
+  "./script.js?v=13",
   "./site.webmanifest",
   "./app-icon.png"
 ];

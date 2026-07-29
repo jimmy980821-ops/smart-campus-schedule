@@ -313,6 +313,17 @@ h2 {
   color: var(--muted);
 }
 
+.schedule-heading-actions {
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+}
+
+.sample-schedule-button {
+  min-height: 42px;
+  padding-block: 9px;
+}
+
 .button,
 .icon-button,
 .course-button {
@@ -1224,6 +1235,74 @@ html[data-theme="dark"] .device-status.is-online {
   text-align: center;
 }
 
+.contextual-empty strong {
+  display: block;
+  color: var(--ink);
+  font-size: 1rem;
+}
+
+.contextual-empty p {
+  margin: 7px auto 16px;
+}
+
+.contextual-empty .button {
+  min-height: 42px;
+}
+
+.today-status-note {
+  margin-bottom: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--soft);
+  color: var(--muted);
+  text-align: center;
+}
+
+.login-guide-copy {
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.login-benefit-list {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.login-benefit-list li {
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 13px;
+  border-radius: 13px;
+  background: var(--soft);
+}
+
+.login-benefit-list li > span {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.login-benefit-list strong,
+.login-benefit-list small {
+  display: block;
+}
+
+.login-benefit-list small {
+  margin-top: 3px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 html[data-theme="dark"] .empty-state {
   border-color: #405069;
 }
@@ -1492,6 +1571,20 @@ html[data-theme="dark"] .site-footer {
   .hero-heading,
   .section-heading {
     display: block;
+  }
+
+  .schedule-heading-actions {
+    justify-items: stretch;
+    margin-top: 18px;
+  }
+
+  .schedule-heading-actions .sample-schedule-button {
+    width: 100%;
+    margin-top: 0;
+  }
+
+  .schedule-heading-actions .legend {
+    justify-content: flex-start;
   }
 
   .hero-actions,

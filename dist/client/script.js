@@ -10,10 +10,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   getFirestore,
   onSnapshot,
+  query,
   setDoc,
+  where,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 import {
@@ -53,7 +56,7 @@ const periodTimes = [
   { period: 6, start: "14:20", end: "15:10" }
 ];
 
-const weeklySchedule = {
+const defaultWeeklySchedule = {
   1: [
     { period: 1, subject: "導師時間", room: "305 教室", teacher: "趙晉鴻" },
     { period: 2, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
@@ -113,15 +116,28 @@ const subjectColors = {
 
 const STORAGE_KEYS = {
   assignments: "campusFlowAssignments",
-  exams: "campusFlowExams"
+  exams: "campusFlowExams",
+  schedule: "campusFlowWeeklySchedule",
+  theme: "campusFlowTheme"
 };
 
+const COMPLETED_ASSIGNMENT_RETENTION_DAYS = 30;
+const DEVICE_ONLINE_WINDOW_MS = 5 * 60 * 1000;
+const DEVICE_HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
 const weekdayNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
 const shortDateFormatter = new Intl.DateTimeFormat("zh-TW", { month: "long", day: "numeric", weekday: "long" });
 const fullDateFormatter = new Intl.DateTimeFormat("zh-TW", { year: "numeric", month: "long", day: "numeric" });
+const deviceDateTimeFormatter = new Intl.DateTimeFormat("zh-TW", {
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit"
+});
 
-let assignments = loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments());
+let weeklySchedule = normalizeSchedule(loadStorage(STORAGE_KEYS.schedule, createEmptySchedule()));
+let assignments = removeExpiredCompletedAssignments(loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments()));
 let exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
+let pushDevices = [];
 let notificationTimer = null;
 let toastTimer = null;
 let notifiedCourseKey = "";
@@ -129,6 +145,8 @@ let currentUser = null;
 let cloudUnsubscribers = [];
 let messaging = null;
 let serviceWorkerRegistration = null;
+let maintenanceTimer = null;
+let devicePresenceTimer = null;
 
 const elements = {
   todayDate: document.querySelector("#today-date"),
@@ -145,17 +163,39 @@ const elements = {
   notificationMessage: document.querySelector("#notification-message"),
   authButton: document.querySelector("#auth-button"),
   authStatus: document.querySelector("#auth-status"),
+  loginGuideModal: document.querySelector("#login-guide-modal"),
+  loginGuideContinue: document.querySelector("#login-guide-continue"),
   scheduleBody: document.querySelector("#schedule-body"),
+  importSampleScheduleButton: document.querySelector("#import-sample-schedule"),
   assignmentSummary: document.querySelector("#assignment-summary"),
   assignmentList: document.querySelector("#assignment-list"),
   examList: document.querySelector("#exam-list"),
-  analysis: document.querySelector("#free-period-analysis"),
+  learningOverview: document.querySelector("#learning-overview-grid"),
+  deviceCount: document.querySelector("#device-count"),
+  deviceCountNote: document.querySelector("#device-count-note"),
+  deviceSyncState: document.querySelector("#device-sync-state"),
+  deviceSyncNote: document.querySelector("#device-sync-note"),
+  deviceList: document.querySelector("#device-list"),
+  refreshDeviceButton: document.querySelector("#refresh-device-button"),
+  gsatCard: document.querySelector("#gsat-home-card"),
+  gsatTitle: document.querySelector("#gsat-home-title"),
+  gsatDate: document.querySelector("#gsat-home-date"),
+  gsatDays: document.querySelector("#gsat-home-days"),
+  gsatUnit: document.querySelector("#gsat-home-unit"),
+  gsatMessage: document.querySelector("#gsat-home-message"),
+  gsatManageButton: document.querySelector("#gsat-manage-button"),
   assignmentModal: document.querySelector("#assignment-modal"),
   assignmentForm: document.querySelector("#assignment-form"),
   examModal: document.querySelector("#exam-modal"),
   examForm: document.querySelector("#exam-form"),
   courseModal: document.querySelector("#course-modal"),
+  courseForm: document.querySelector("#course-form"),
+  courseDeleteButton: document.querySelector("#delete-course-button"),
   toast: document.querySelector("#toast"),
+  themeButton: document.querySelector("#theme-toggle"),
+  themeIcon: document.querySelector("#theme-toggle-icon"),
+  themeLabel: document.querySelector("#theme-toggle-label"),
+  themeColorMeta: document.querySelector("#theme-color-meta"),
   menuButton: document.querySelector(".menu-toggle"),
   navLinks: document.querySelector("#nav-links")
 };
@@ -163,29 +203,51 @@ const elements = {
 document.addEventListener("DOMContentLoaded", init);
 
 function init() {
+  initializeTheme();
+  saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+  saveStorage(STORAGE_KEYS.assignments, assignments);
   populateSubjectOptions();
   renderSchedule();
   renderAssignments();
   renderExams();
+  renderDeviceManagement();
   updateLiveCourseState();
   bindEvents();
   setDefaultFormDates();
   initializePwa();
   initializeCloudSync();
   notificationTimer = window.setInterval(updateLiveCourseState, 30000);
+  maintenanceTimer = window.setInterval(cleanupCompletedAssignments, 60 * 60 * 1000);
+  devicePresenceTimer = window.setInterval(() => {
+    updateDevicePresence();
+    renderDeviceManagement();
+  }, DEVICE_HEARTBEAT_INTERVAL_MS);
 }
 
 function bindEvents() {
   document.querySelector("#add-assignment-button").addEventListener("click", () => openAssignmentModal());
   document.querySelector("#add-exam-button").addEventListener("click", () => openExamModal());
   elements.assignmentForm.addEventListener("submit", saveAssignment);
+  elements.courseForm.addEventListener("submit", saveCourse);
+  elements.courseDeleteButton.addEventListener("click", deleteCourse);
   elements.examForm.addEventListener("submit", saveExam);
   elements.notificationButton.addEventListener("click", enableBackgroundNotifications);
+  elements.refreshDeviceButton.addEventListener("click", refreshCurrentDevice);
+  elements.deviceList.addEventListener("click", handleDeviceAction);
   elements.authButton.addEventListener("click", handleAuthButton);
+  elements.loginGuideContinue.addEventListener("click", signInWithGoogle);
+  elements.importSampleScheduleButton.addEventListener("click", importSampleSchedule);
+  elements.themeButton.addEventListener("click", toggleTheme);
+  elements.gsatManageButton.addEventListener("click", openGsatExamModal);
   elements.menuButton.addEventListener("click", toggleMenu);
 
   elements.navLinks.addEventListener("click", (event) => {
     if (event.target.matches("a")) closeMenu();
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    updateDevicePresence(document.visibilityState === "visible");
+    renderDeviceManagement();
   });
 
   document.querySelectorAll(".modal-close").forEach((button) => {
@@ -200,8 +262,59 @@ function bindEvents() {
 
   window.addEventListener("beforeunload", () => {
     if (notificationTimer) window.clearInterval(notificationTimer);
+    if (maintenanceTimer) window.clearInterval(maintenanceTimer);
+    if (devicePresenceTimer) window.clearInterval(devicePresenceTimer);
+    updateDevicePresence(false);
     stopCloudListeners();
   });
+}
+
+/* ====================== 白天／黑夜模式 ====================== */
+
+function initializeTheme() {
+  applyTheme(getSavedTheme());
+
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (event) => {
+    if (getSavedTheme() === "system") applyTheme("system", event.matches ? "dark" : "light");
+  });
+}
+
+function toggleTheme() {
+  const currentMode = getSavedTheme();
+  const nextMode = currentMode === "system" ? "light" : currentMode === "light" ? "dark" : "system";
+  try {
+    localStorage.setItem(STORAGE_KEYS.theme, nextMode);
+  } catch {
+    // localStorage 無法使用時仍可在本次瀏覽中切換。
+  }
+  applyTheme(nextMode);
+  const labels = { system: "跟隨系統", light: "白天模式", dark: "黑夜模式" };
+  showToast(`已切換為${labels[nextMode]}`);
+}
+
+function applyTheme(mode, forcedSystemTheme = "") {
+  const systemTheme = forcedSystemTheme ||
+    (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  const resolvedTheme = mode === "system" ? systemTheme : mode;
+  const isDark = resolvedTheme === "dark";
+  const nextModes = { system: "白天", light: "黑夜", dark: "跟隨系統" };
+  const labels = { system: "系統", light: "白天", dark: "黑夜" };
+  const icons = { system: "◐", light: "☀", dark: "☾" };
+  document.documentElement.dataset.theme = isDark ? "dark" : "light";
+  elements.themeButton.dataset.mode = mode;
+  elements.themeButton.setAttribute("aria-label", `目前${labels[mode]}模式，點擊切換為${nextModes[mode]}模式`);
+  elements.themeIcon.textContent = icons[mode];
+  elements.themeLabel.textContent = labels[mode];
+  elements.themeColorMeta.setAttribute("content", isDark ? "#0d1524" : "#f4f7fb");
+}
+
+function getSavedTheme() {
+  try {
+    const savedTheme = localStorage.getItem(STORAGE_KEYS.theme);
+    return ["system", "dark", "light"].includes(savedTheme) ? savedTheme : "system";
+  } catch {
+    return "system";
+  }
 }
 
 /* ====================== Firebase 登入與跨裝置同步 ====================== */
@@ -209,6 +322,7 @@ function bindEvents() {
 function initializeCloudSync() {
   onAuthStateChanged(auth, async (user) => {
     stopCloudListeners();
+    pushDevices = [];
     currentUser = user;
     updateAuthInterface();
 
@@ -217,6 +331,7 @@ function initializeCloudSync() {
       exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
       renderAssignments();
       renderExams();
+      renderDeviceManagement();
       return;
     }
 
@@ -232,16 +347,31 @@ function initializeCloudSync() {
 }
 
 async function handleAuthButton() {
+  if (!currentUser) {
+    elements.loginGuideModal.showModal();
+    return;
+  }
+
   elements.authButton.disabled = true;
   try {
-    if (currentUser) {
       await removeCurrentPushDevice();
       await signOut(auth);
       showToast("已登出，改用本機資料");
-    } else {
-      await signInWithPopup(auth, googleProvider);
-      showToast("登入成功，開始同步");
-    }
+  } catch (error) {
+    setSyncStatus("登出暫時失敗，請稍後再試");
+    showToast("Google 登出未完成");
+    console.error("Firebase sign-out failed:", error);
+  } finally {
+    elements.authButton.disabled = false;
+  }
+}
+
+async function signInWithGoogle() {
+  elements.loginGuideContinue.disabled = true;
+  try {
+    await signInWithPopup(auth, googleProvider);
+    elements.loginGuideModal.close();
+    showToast("登入成功，開始同步");
   } catch (error) {
     const cancelled = ["auth/popup-closed-by-user", "auth/cancelled-popup-request"].includes(error.code);
     if (!cancelled) {
@@ -250,7 +380,7 @@ async function handleAuthButton() {
       console.error("Firebase authentication failed:", error);
     }
   } finally {
-    elements.authButton.disabled = false;
+    elements.loginGuideContinue.disabled = false;
   }
 }
 
@@ -263,8 +393,9 @@ function updateAuthInterface() {
   } else {
     elements.authButton.textContent = "Google 登入同步";
     elements.authButton.setAttribute("aria-label", "使用 Google 帳號登入並同步資料");
-    setSyncStatus("目前儲存在這台裝置");
+    setSyncStatus("登入後自動備份，換手機資料也不會不見");
   }
+  renderDeviceManagement();
 }
 
 function setSyncStatus(message, isSynced = false) {
@@ -275,8 +406,17 @@ function setSyncStatus(message, isSynced = false) {
 async function migrateLocalDataToCloud(userId) {
   await Promise.all([
     uploadLocalCollectionWhenCloudIsEmpty(userId, "assignments", assignments),
-    uploadLocalCollectionWhenCloudIsEmpty(userId, "exams", exams)
+    uploadLocalCollectionWhenCloudIsEmpty(userId, "exams", exams),
+    uploadLocalScheduleWhenCloudIsEmpty(userId)
   ]);
+}
+
+async function uploadLocalScheduleWhenCloudIsEmpty(userId) {
+  const scheduleDocument = doc(database, "users", userId, "settings", "schedule");
+  const snapshot = await getDoc(scheduleDocument);
+  if (!snapshot.exists()) {
+    await setDoc(scheduleDocument, { days: weeklySchedule, updatedAt: Date.now() });
+  }
 }
 
 async function uploadLocalCollectionWhenCloudIsEmpty(userId, collectionName, items) {
@@ -307,15 +447,43 @@ function startCloudListeners(userId) {
 
   cloudUnsubscribers = [
     subscribe("assignments", (items) => {
-      assignments = items;
+      const expiredItems = items.filter(isExpiredCompletedAssignment);
+      const completedWithoutTimestamp = items.filter((item) => item.completed && !Number(item.completedAt));
+      assignments = removeExpiredCompletedAssignments(items);
       saveStorage(STORAGE_KEYS.assignments, assignments);
       renderAssignments();
+      expiredItems.forEach((item) => deleteCloudRecord("assignments", item.id));
+      completedWithoutTimestamp.forEach((item) => {
+        const normalizedItem = assignments.find((assignment) => assignment.id === item.id);
+        if (normalizedItem) syncCloudRecord("assignments", normalizedItem);
+      });
     }),
     subscribe("exams", (items) => {
       exams = items;
       saveStorage(STORAGE_KEYS.exams, exams);
       renderExams();
-    })
+    }),
+    onSnapshot(
+      query(collection(database, "pushDevices"), where("uid", "==", userId)),
+      (snapshot) => {
+        pushDevices = snapshot.docs
+          .map((itemDocument) => ({ ...itemDocument.data(), id: itemDocument.id }))
+          .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+        renderDeviceManagement();
+      },
+      handleCloudError
+    ),
+    onSnapshot(
+      doc(database, "users", userId, "settings", "schedule"),
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+        weeklySchedule = normalizeSchedule(snapshot.data().days);
+        saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+        populateSubjectOptions();
+        updateLiveCourseState();
+      },
+      handleCloudError
+    )
   ];
 }
 
@@ -345,8 +513,24 @@ async function deleteCloudRecord(collectionName, id) {
   }
 }
 
+async function syncSchedule() {
+  if (!currentUser) return;
+  try {
+    await setDoc(
+      doc(database, "users", currentUser.uid, "settings", "schedule"),
+      { days: weeklySchedule, updatedAt: Date.now() }
+    );
+  } catch (error) {
+    handleCloudError(error);
+  }
+}
+
 function handleCloudError(error) {
   setSyncStatus("雲端同步暫時失敗，資料仍保存在本機");
+  if (elements.deviceSyncState) {
+    elements.deviceSyncState.textContent = "同步異常";
+    elements.deviceSyncNote.textContent = "請檢查網路後重新整理";
+  }
   console.error("Firebase sync failed:", error);
 }
 
@@ -406,7 +590,7 @@ async function enableBackgroundNotifications() {
     if (!token) throw new Error("FCM did not return a registration token.");
 
     elements.notificationButton.textContent = "背景通知已開啟";
-    elements.notificationMessage.textContent = "設定完成；關閉網站後仍可在上課前收到通知。";
+    elements.notificationMessage.textContent = "設定完成；關閉網站後仍可收到課程、作業與學測倒數通知。";
     showToast("背景通知已開啟");
   } catch (error) {
     elements.notificationMessage.textContent = "背景通知設定失敗，請確認 Firebase Cloud Messaging 已啟用。";
@@ -426,15 +610,48 @@ async function registerPushDevice() {
   });
   if (!token) return "";
 
+  const previousDeviceId = getCurrentDeviceId();
   const deviceId = await hashText(token);
+  const now = Date.now();
   await setDoc(doc(database, "pushDevices", deviceId), {
     uid: currentUser.uid,
     token,
     platform: getDeviceLabel(),
-    updatedAt: Date.now()
-  });
-  localStorage.setItem("campusFlowPushDeviceId", deviceId);
+    browser: getBrowserLabel(),
+    installMode: isStandalonePwa() ? "主畫面 App" : "瀏覽器",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Taipei",
+    updatedAt: now,
+    lastSeenAt: now,
+    online: true
+  }, { merge: true });
+  setCurrentDeviceId(deviceId);
+
+  if (previousDeviceId && previousDeviceId !== deviceId) {
+    try {
+      await deleteDoc(doc(database, "pushDevices", previousDeviceId));
+    } catch (error) {
+      console.warn("Old push device cleanup failed:", error);
+    }
+  }
   return token;
+}
+
+async function updateDevicePresence(isOnline = document.visibilityState === "visible") {
+  const deviceId = getCurrentDeviceId();
+  if (!deviceId || !currentUser || !navigator.onLine) return;
+
+  try {
+    await setDoc(doc(database, "pushDevices", deviceId), {
+      uid: currentUser.uid,
+      platform: getDeviceLabel(),
+      browser: getBrowserLabel(),
+      installMode: isStandalonePwa() ? "主畫面 App" : "瀏覽器",
+      lastSeenAt: Date.now(),
+      online: Boolean(isOnline)
+    }, { merge: true });
+  } catch (error) {
+    console.warn("Device presence update failed:", error);
+  }
 }
 
 async function refreshExistingPushToken() {
@@ -442,8 +659,9 @@ async function refreshExistingPushToken() {
   try {
     const token = await registerPushDevice();
     if (token) {
+      await updateDevicePresence(true);
       elements.notificationButton.textContent = "背景通知已開啟";
-      elements.notificationMessage.textContent = "此裝置已啟用背景課程提醒。";
+      elements.notificationMessage.textContent = "此裝置已啟用課程、作業與學測背景提醒。";
     }
   } catch (error) {
     console.warn("Push token refresh failed:", error);
@@ -451,21 +669,144 @@ async function refreshExistingPushToken() {
 }
 
 async function removeCurrentPushDevice() {
-  const deviceId = localStorage.getItem("campusFlowPushDeviceId");
+  const deviceId = getCurrentDeviceId();
   if (!deviceId || !currentUser) return;
   try {
     await deleteDoc(doc(database, "pushDevices", deviceId));
-    localStorage.removeItem("campusFlowPushDeviceId");
+    clearCurrentDeviceId();
   } catch (error) {
     console.warn("Push device removal failed:", error);
   }
+}
+
+async function refreshCurrentDevice() {
+  if (!currentUser) {
+    showToast("請先登入 Google 帳號");
+    return;
+  }
+
+  if (!("Notification" in window) || Notification.permission !== "granted") {
+    await enableBackgroundNotifications();
+    return;
+  }
+
+  elements.refreshDeviceButton.disabled = true;
+  try {
+    const token = await registerPushDevice();
+    if (!token) throw new Error("FCM did not return a registration token.");
+    showToast("這台裝置已更新");
+  } catch (error) {
+    showToast("裝置更新失敗，請稍後再試");
+    console.error("Push device refresh failed:", error);
+  } finally {
+    elements.refreshDeviceButton.disabled = false;
+  }
+}
+
+async function handleDeviceAction(event) {
+  const button = event.target.closest("button[data-device-action]");
+  if (!button || !currentUser) return;
+
+  const deviceId = button.dataset.deviceId;
+  const device = pushDevices.find((item) => item.id === deviceId);
+  if (!device) return;
+
+  const isCurrentDevice = deviceId === getCurrentDeviceId();
+  const confirmation = isCurrentDevice
+    ? "移除這台裝置後，將不再收到背景通知。確定要移除嗎？"
+    : `確定要移除「${device.platform || "未命名裝置"}」嗎？`;
+  if (!window.confirm(confirmation)) return;
+
+  button.disabled = true;
+  try {
+    await deleteDoc(doc(database, "pushDevices", deviceId));
+    if (isCurrentDevice) {
+      clearCurrentDeviceId();
+      elements.notificationButton.textContent = "開啟背景通知";
+      elements.notificationMessage.textContent = "這台裝置的背景通知已關閉，可隨時重新開啟。";
+    }
+    showToast("裝置已移除");
+  } catch (error) {
+    button.disabled = false;
+    showToast("無法移除裝置，請稍後再試");
+    console.error("Push device removal failed:", error);
+  }
+}
+
+function renderDeviceManagement() {
+  if (!elements.deviceList) return;
+
+  elements.refreshDeviceButton.disabled = !currentUser;
+  if (!currentUser) {
+    elements.deviceCount.textContent = "0 台";
+    elements.deviceCountNote.textContent = "登入後即可查看";
+    elements.deviceSyncState.textContent = "尚未登入";
+    elements.deviceSyncNote.textContent = "使用 Google 帳號同步課表、作業與考試";
+    elements.deviceList.innerHTML = '<div class="empty-state">請先登入 Google 帳號，即可查看同步與通知裝置。</div>';
+    return;
+  }
+
+  const currentDeviceId = getCurrentDeviceId();
+  const onlineDeviceCount = pushDevices.filter(isDeviceOnline).length;
+  elements.deviceCount.textContent = `${pushDevices.length} 台`;
+  elements.deviceCountNote.textContent = pushDevices.length
+    ? `${onlineDeviceCount} 台在線・皆已啟用背景通知`
+    : "目前沒有啟用背景通知的裝置";
+  elements.deviceSyncState.textContent = "即時同步中";
+  elements.deviceSyncNote.textContent = currentUser.email || currentUser.displayName || "Google 帳號";
+
+  if (!pushDevices.length) {
+    elements.deviceList.innerHTML = '<div class="empty-state">尚未啟用通知裝置。請按「更新這台裝置」完成設定。</div>';
+    return;
+  }
+
+  elements.deviceList.innerHTML = pushDevices.map((device) => {
+    const isCurrentDevice = device.id === currentDeviceId;
+    const platform = device.platform || "未知裝置";
+    const browser = device.browser || "瀏覽器";
+    const installMode = device.installMode || "網頁";
+    const isOnline = isDeviceOnline(device);
+    const lastSeenAt = device.lastSeenAt || device.updatedAt;
+
+    return `
+      <article class="device-card${isCurrentDevice ? " current-device" : ""}${isOnline ? " online-device" : ""}">
+        <span class="device-type" aria-hidden="true">${escapeHtml(getDeviceShortCode(platform))}</span>
+        <div class="device-card-body">
+          <div class="device-card-heading">
+            <h3>${escapeHtml(platform)}</h3>
+            <span class="device-status ${isOnline ? "is-online" : "is-offline"}">
+              <i aria-hidden="true"></i>${isOnline ? "在線中" : "離線"}
+            </span>
+            ${isCurrentDevice ? '<span class="device-status is-current">這台裝置</span>' : ""}
+          </div>
+          <p>${escapeHtml(browser)} · ${escapeHtml(installMode)}</p>
+          <small>${isOnline ? "目前使用中" : `最後連線：${escapeHtml(formatDeviceUpdatedAt(lastSeenAt))}`}</small>
+        </div>
+        <button
+          class="button button-secondary device-remove-button"
+          type="button"
+          data-device-action="remove"
+          data-device-id="${escapeHtml(device.id)}"
+          aria-label="移除 ${escapeHtml(platform)}">
+          移除
+        </button>
+      </article>
+    `;
+  }).join("");
+}
+
+function isDeviceOnline(device) {
+  const lastSeenAt = Number(device?.lastSeenAt || device?.updatedAt);
+  return device?.online !== false
+    && Number.isFinite(lastSeenAt)
+    && Date.now() - lastSeenAt <= DEVICE_ONLINE_WINDOW_MS;
 }
 
 async function showForegroundPushMessage(payload) {
   const data = payload.data || {};
   const title = data.title || "校園日程提醒";
   const options = {
-    body: data.body || "有新的課程提醒。",
+    body: data.body || "有新的校園日程提醒。",
     icon: data.icon || "./app-icon.png",
     badge: "./app-icon.png",
     tag: data.tag || "campus-flow-reminder",
@@ -478,7 +819,7 @@ async function showForegroundPushMessage(payload) {
 }
 
 function isIosDevice() {
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return Boolean(getAppleDeviceType());
 }
 
 function isStandalonePwa() {
@@ -486,9 +827,68 @@ function isStandalonePwa() {
 }
 
 function getDeviceLabel() {
-  if (isIosDevice()) return "iPhone／iPad";
+  const appleDevice = getAppleDeviceType();
+  if (appleDevice) return appleDevice;
   if (/Android/i.test(navigator.userAgent)) return "Android";
   return "電腦瀏覽器";
+}
+
+function getAppleDeviceType() {
+  const userAgent = navigator.userAgent;
+  if (/iPad/i.test(userAgent)) return "iPad";
+  if (/iPhone|iPod/i.test(userAgent)) return "iPhone";
+
+  // iPadOS 13 之後可能使用桌面版 Mac User-Agent。
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return "iPad";
+  return "";
+}
+
+function getBrowserLabel() {
+  const userAgent = navigator.userAgent;
+  if (/Edg\//i.test(userAgent)) return "Microsoft Edge";
+  if (/CriOS/i.test(userAgent)) return "Google Chrome";
+  if (/FxiOS/i.test(userAgent)) return "Firefox";
+  if (/Chrome/i.test(userAgent)) return "Google Chrome";
+  if (/Firefox/i.test(userAgent)) return "Firefox";
+  if (/Safari/i.test(userAgent)) return "Safari";
+  return "瀏覽器";
+}
+
+function getDeviceShortCode(platform) {
+  if (/iPhone/i.test(platform)) return "IPH";
+  if (/iPad/i.test(platform)) return "IPD";
+  if (/Android/i.test(platform)) return "AND";
+  return "WEB";
+}
+
+function formatDeviceUpdatedAt(value) {
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return "尚無紀錄";
+  return deviceDateTimeFormatter.format(new Date(timestamp));
+}
+
+function getCurrentDeviceId() {
+  try {
+    return localStorage.getItem("campusFlowPushDeviceId") || "";
+  } catch {
+    return "";
+  }
+}
+
+function setCurrentDeviceId(deviceId) {
+  try {
+    localStorage.setItem("campusFlowPushDeviceId", deviceId);
+  } catch {
+    // 無法使用 localStorage 時仍保留雲端通知註冊。
+  }
+}
+
+function clearCurrentDeviceId() {
+  try {
+    localStorage.removeItem("campusFlowPushDeviceId");
+  } catch {
+    // 無法使用 localStorage 時，雲端裝置資料仍已移除。
+  }
 }
 
 async function hashText(value) {
@@ -506,7 +906,7 @@ function updateLiveCourseState() {
   elements.todayDate.textContent = `${shortDateFormatter.format(now)} · ${getDailyGreeting(now)}`;
   renderTodayCourses(todayCourses, liveState);
   renderNextCourse(liveState);
-  renderFreePeriodAnalysis(todayCourses, day);
+  renderLearningOverview();
   renderSchedule(liveState);
   maybeSendClassNotification(liveState);
 }
@@ -533,12 +933,32 @@ function getLiveCourseState(now, todayCourses) {
 function renderTodayCourses(courses, liveState) {
   elements.todayCount.textContent = `${courses.length} 節課`;
 
-  if (!courses.length) {
-    elements.todayList.innerHTML = `<div class="empty-state">今日沒有課程，好好休息，也可以整理下週計畫。</div>`;
+  if (!hasAnyScheduleCourses()) {
+    elements.todayList.innerHTML = `
+      <div class="empty-state contextual-empty">
+        <strong>還沒有建立課表</strong>
+        <p>點選下方空堂新增第一堂課，或先套用範例課表看看。</p>
+        <button class="button button-primary" type="button" data-action="import-sample">匯入範例課表</button>
+      </div>`;
+    elements.todayList.querySelector("[data-action='import-sample']").addEventListener("click", importSampleSchedule);
     return;
   }
 
-  elements.todayList.innerHTML = courses.map((course) => {
+  if (!courses.length) {
+    elements.todayList.innerHTML = `
+      <div class="empty-state contextual-empty">
+        <strong>今天沒有安排課程</strong>
+        <p>今天可以休息一下，也可以整理作業與下一次考試。</p>
+      </div>`;
+    return;
+  }
+
+  const allCoursesFinished = !liveState.currentCourse && !liveState.nextCourse;
+  const finishedMessage = allCoursesFinished
+    ? `<div class="today-status-note"><strong>今天的課程已經結束囉，辛苦了！</strong></div>`
+    : "";
+
+  elements.todayList.innerHTML = finishedMessage + courses.map((course) => {
     const time = getPeriodTime(course.period);
     const isCurrent = liveState.currentCourse?.period === course.period;
     const isNext = liveState.nextCourse?.period === course.period;
@@ -560,6 +980,16 @@ function renderTodayCourses(courses, liveState) {
 function renderNextCourse(liveState) {
   const { now, currentCourse, nextCourse, minutesUntil } = liveState;
   const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+
+  if (!hasAnyScheduleCourses()) {
+    elements.nextStatus.textContent = "尚未建立課表";
+    elements.nextName.textContent = "先新增第一堂課";
+    elements.nextMeta.textContent = "也可以一鍵匯入範例課表";
+    elements.nextCountdown.textContent = "開始設定";
+    elements.nextCountdownLabel.textContent = "建立屬於你的每週節奏";
+    elements.reminderText.textContent = "課表建立後，這裡會顯示下一堂課與上課提醒。";
+    return;
+  }
 
   if (nextCourse) {
     const time = getPeriodTime(nextCourse.period);
@@ -593,11 +1023,22 @@ function renderNextCourse(liveState) {
 
 function renderSchedule(liveState = getLiveCourseState(new Date(), weeklySchedule[new Date().getDay()] || [])) {
   const currentDay = liveState.now.getDay();
+  elements.importSampleScheduleButton.hidden = hasAnyScheduleCourses();
 
   elements.scheduleBody.innerHTML = periodTimes.map((time) => {
     const cells = [1, 2, 3, 4, 5].map((day) => {
       const course = weeklySchedule[day].find((item) => item.period === time.period);
-      if (!course) return `<td><span class="empty-period" aria-label="空堂">—</span></td>`;
+      if (!course) {
+        return `
+          <td>
+            <button class="course-button empty-course" type="button"
+              aria-label="新增${weekdayNames[day]}第 ${time.period} 節課程"
+              data-day="${day}" data-period="${time.period}">
+              <strong>＋</strong>
+              <small>新增課程</small>
+            </button>
+          </td>`;
+      }
 
       const isCurrent = day === currentDay && liveState.currentCourse?.period === time.period;
       const isNext = day === currentDay && liveState.nextCourse?.period === time.period;
@@ -629,20 +1070,84 @@ function renderSchedule(liveState = getLiveCourseState(new Date(), weeklySchedul
   });
 }
 
+function hasAnyScheduleCourses() {
+  return Object.values(weeklySchedule).some((courses) => Array.isArray(courses) && courses.length > 0);
+}
+
+async function importSampleSchedule() {
+  if (hasAnyScheduleCourses()) {
+    showToast("目前已有課表，範例不會覆蓋現有資料");
+    return;
+  }
+  if (!window.confirm("要匯入範例課表嗎？之後仍可逐堂修改或刪除。")) return;
+
+  weeklySchedule = normalizeSchedule(defaultWeeklySchedule);
+  saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+  populateSubjectOptions();
+  updateLiveCourseState();
+  showToast("已匯入範例課表");
+  await syncSchedule();
+}
+
 function openCourseModal(day, period) {
   const course = weeklySchedule[day].find((item) => item.period === period);
   const time = getPeriodTime(period);
-  if (!course) return;
 
-  document.querySelector("#course-modal-title").textContent = course.subject;
-  document.querySelector("#course-detail").innerHTML = `
-    <div class="detail-row"><span>上課日</span><strong>${weekdayNames[day]}</strong></div>
-    <div class="detail-row"><span>節次</span><strong>第 ${period} 節</strong></div>
-    <div class="detail-row"><span>時間</span><strong>${time.start}–${time.end}</strong></div>
-    <div class="detail-row"><span>教室</span><strong>${escapeHtml(course.room)}</strong></div>
-    <div class="detail-row"><span>任課老師</span><strong>${escapeHtml(course.teacher)}</strong></div>
-    <div class="detail-row"><span>課前提醒</span><strong>建議提早 5 分鐘到教室</strong></div>`;
+  elements.courseForm.reset();
+  document.querySelector("#course-day").value = String(day);
+  document.querySelector("#course-period").value = String(period);
+  document.querySelector("#course-modal-title").textContent = course ? "編輯課程" : "新增課程";
+  document.querySelector("#course-slot").textContent =
+    `${weekdayNames[day]}・第 ${period} 節・${time.start}–${time.end}`;
+  document.querySelector("#course-subject").value = course?.subject || "";
+  document.querySelector("#course-room").value = course?.room || "305 教室";
+  document.querySelector("#course-teacher").value = course?.teacher || "";
+  document.querySelector("#course-error").textContent = "";
+  elements.courseDeleteButton.hidden = !course;
   elements.courseModal.showModal();
+}
+
+async function saveCourse(event) {
+  event.preventDefault();
+  const day = Number(document.querySelector("#course-day").value);
+  const period = Number(document.querySelector("#course-period").value);
+  const subject = document.querySelector("#course-subject").value.trim();
+  const room = document.querySelector("#course-room").value.trim();
+  const teacher = document.querySelector("#course-teacher").value.trim();
+  const error = document.querySelector("#course-error");
+
+  if (!subject || !room || !teacher) {
+    error.textContent = "請完整填寫科目、教室與任課老師。";
+    return;
+  }
+
+  const course = { period, subject, room, teacher };
+  weeklySchedule[day] = [
+    ...weeklySchedule[day].filter((item) => item.period !== period),
+    course
+  ].sort((a, b) => a.period - b.period);
+
+  saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+  populateSubjectOptions();
+  updateLiveCourseState();
+  elements.courseModal.close();
+  showToast("課表已更新");
+  await syncSchedule();
+}
+
+async function deleteCourse() {
+  const day = Number(document.querySelector("#course-day").value);
+  const period = Number(document.querySelector("#course-period").value);
+  const course = weeklySchedule[day].find((item) => item.period === period);
+  if (!course || !window.confirm(`確定要刪除「${course.subject}」嗎？`)) return;
+
+  weeklySchedule[day] = weeklySchedule[day].filter((item) => item.period !== period);
+  saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+  populateSubjectOptions();
+  updateLiveCourseState();
+  elements.courseModal.close();
+  showToast("課程已刪除");
+  await syncSchedule();
 }
 
 function renderAssignments() {
@@ -666,6 +1171,7 @@ function renderAssignments() {
     ["已逾期", counts.overdue],
     ["已完成", counts.completed]
   ].map(([label, value]) => `<div class="summary-card"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  renderLearningOverview();
 
   if (!sorted.length) {
     elements.assignmentList.innerHTML = `<div class="empty-state">目前沒有作業。新增一項，開始規劃吧！</div>`;
@@ -732,7 +1238,15 @@ async function saveAssignment(event) {
     savedAssignment = assignments.find((item) => item.id === id);
     showToast("資料已更新");
   } else {
-    savedAssignment = { id: createId(), subject, content, dueDate, completed: false };
+    savedAssignment = {
+      id: createId(),
+      subject,
+      content,
+      dueDate,
+      completed: false,
+      completedAt: null,
+      createdAt: Date.now()
+    };
     assignments.push(savedAssignment);
     showToast("作業新增成功");
   }
@@ -751,6 +1265,7 @@ async function handleAssignmentAction(action, id) {
     openAssignmentModal(item);
   } else if (action === "toggle") {
     item.completed = !item.completed;
+    item.completedAt = item.completed ? Date.now() : null;
     saveStorage(STORAGE_KEYS.assignments, assignments);
     renderAssignments();
     showToast(item.completed ? "作業已完成" : "已改為未完成");
@@ -764,14 +1279,52 @@ async function handleAssignmentAction(action, id) {
   }
 }
 
+function removeExpiredCompletedAssignments(items) {
+  const completedAtFallback = Date.now();
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => !isExpiredCompletedAssignment(item))
+    .map((item) => item.completed && !Number(item.completedAt)
+      ? { ...item, completedAt: completedAtFallback }
+      : item);
+}
+
+function isExpiredCompletedAssignment(item) {
+  if (!item?.completed) return false;
+  const completedAt = Number(item.completedAt);
+  if (!Number.isFinite(completedAt) || completedAt <= 0) return false;
+  return Date.now() - completedAt >= COMPLETED_ASSIGNMENT_RETENTION_DAYS * 86400000;
+}
+
+async function cleanupCompletedAssignments() {
+  const expiredItems = assignments.filter(isExpiredCompletedAssignment);
+  if (!expiredItems.length) return;
+
+  const expiredIds = new Set(expiredItems.map((item) => item.id));
+  assignments = assignments.filter((item) => !expiredIds.has(item.id));
+  saveStorage(STORAGE_KEYS.assignments, assignments);
+  renderAssignments();
+  await Promise.all(expiredItems.map((item) => deleteCloudRecord("assignments", item.id)));
+  showToast("已自動清除完成超過 30 天的作業");
+}
+
 function renderExams() {
   const sorted = [...exams].sort((a, b) => parseDate(a.date) - parseDate(b.date));
+  renderGsatCountdown();
+  renderLearningOverview();
   if (!sorted.length) {
     elements.examList.innerHTML = `<div class="empty-state">目前沒有考試。新增重要日期，讓準備更從容。</div>`;
     return;
   }
 
-  const examColors = { 段考: "#315fbc", 模擬考: "#7a59a5", 學測: "#d06b43", 其他考試: "#39816a" };
+  const examColors = {
+    段考: "#315fbc",
+    第一次段考: "#315fbc",
+    第二次段考: "#4b69b5",
+    第三次段考: "#5d6fa8",
+    模擬考: "#7a59a5",
+    學測: "#d06b43",
+    其他考試: "#39816a"
+  };
 
   elements.examList.innerHTML = sorted.map((exam) => {
     const days = daysBetweenToday(exam.date);
@@ -795,12 +1348,58 @@ function renderExams() {
   });
 }
 
+function renderGsatCountdown() {
+  const gsat = getUpcomingGsat();
+  elements.gsatCard.classList.toggle("is-empty", !gsat);
+  elements.gsatCard.classList.remove("is-today");
+
+  if (!gsat) {
+    elements.gsatTitle.textContent = "尚未設定學測日期";
+    elements.gsatDate.textContent = "請在考試管理新增一筆「學測」類型的考試。";
+    elements.gsatDays.textContent = "—";
+    elements.gsatUnit.textContent = "";
+    elements.gsatMessage.textContent = "設定日期後，首頁與每日通知都會自動開始倒數。";
+    elements.gsatManageButton.textContent = "設定學測日期";
+    return;
+  }
+
+  const days = daysBetweenToday(gsat.date);
+  elements.gsatTitle.textContent = gsat.name;
+  elements.gsatDate.textContent = fullDateFormatter.format(parseDate(gsat.date));
+  elements.gsatDays.textContent = days === 0 ? "今天" : String(days);
+  elements.gsatUnit.textContent = days === 0 ? "" : "天";
+  elements.gsatMessage.textContent = days === 0
+    ? "沉著應試，相信一路累積的準備。"
+    : "每天完成一個小目標，穩定靠近理想校系。";
+  elements.gsatManageButton.textContent = "調整學測日期";
+  elements.gsatCard.classList.toggle("is-today", days === 0);
+}
+
+function getUpcomingGsat() {
+  return exams
+    .filter((exam) => exam.type === "學測" && daysBetweenToday(exam.date) >= 0)
+    .sort((a, b) => parseDate(a.date) - parseDate(b.date))[0] || null;
+}
+
+function openGsatExamModal() {
+  const gsat = getUpcomingGsat();
+  if (gsat) {
+    openExamModal(gsat);
+    return;
+  }
+
+  openExamModal();
+  document.querySelector("#exam-type").value = "學測";
+  document.querySelector("#exam-name").value = "學科能力測驗";
+}
+
 function openExamModal(item = null) {
   elements.examForm.reset();
   clearErrors("exam");
   document.querySelector("#exam-id").value = item?.id || "";
   document.querySelector("#exam-modal-title").textContent = item ? "編輯考試" : "新增考試";
-  document.querySelector("#exam-type").value = item?.type || "段考";
+  const selectedType = item?.type === "段考" ? "第一次段考" : item?.type;
+  document.querySelector("#exam-type").value = selectedType || "第一次段考";
   document.querySelector("#exam-name").value = item?.name || "";
   document.querySelector("#exam-date").value = item?.date || toDateInput(addDays(new Date(), 14));
   elements.examModal.showModal();
@@ -856,43 +1455,37 @@ async function handleExamAction(action, id) {
   }
 }
 
-function renderFreePeriodAnalysis(courses, day) {
-  if (day === 0 || day === 6) {
-    elements.analysis.innerHTML = createAnalysisCards([
-      ["休", "今日課程", "0 節"],
-      ["空", "空堂時段", "今日為週末"],
-      ["長", "最長空堂", "不適用"],
-      ["學", "讀書建議", "安排 45 分鐘複習"]
-    ]);
-    return;
-  }
+function renderLearningOverview() {
+  const pendingAssignments = assignments.filter((item) => !item.completed);
+  const dueWithinSevenDays = pendingAssignments.filter((item) => {
+    const days = daysBetweenToday(item.dueDate);
+    return days >= 0 && days <= 7;
+  });
+  const upcomingExam = exams
+    .filter((exam) => daysBetweenToday(exam.date) >= 0)
+    .sort((a, b) => parseDate(a.date) - parseDate(b.date))[0];
+  const completedCount = assignments.filter((item) => item.completed).length;
+  const completionRate = assignments.length
+    ? Math.round((completedCount / assignments.length) * 100)
+    : 0;
+  const examLabel = upcomingExam
+    ? `${upcomingExam.name}・${daysBetweenToday(upcomingExam.date)} 天`
+    : "尚未設定";
 
-  const occupied = courses.map((course) => course.period);
-  const first = Math.min(...occupied);
-  const last = Math.max(...occupied);
-  const freePeriods = periodTimes
-    .map((time) => time.period)
-    .filter((period) => period >= first && period <= last && !occupied.includes(period));
-  const longest = getLongestConsecutiveRun(freePeriods);
-  const freeLabel = freePeriods.length ? freePeriods.map((period) => `第 ${period} 節`).join("、") : "沒有空堂";
-  const suggestion = freePeriods.length
-    ? `可安排約 ${freePeriods.length * 40} 分鐘`
-    : "今日課程較為集中";
-
-  elements.analysis.innerHTML = createAnalysisCards([
-    ["課", "今日課程", `${courses.length} 節`],
-    ["空", "空堂時段", freeLabel],
-    ["長", "最長空堂", `${longest} 節`],
-    ["學", "讀書建議", suggestion]
+  elements.learningOverview.innerHTML = createAnalysisCards([
+    ["待", "待完成作業", `${pendingAssignments.length} 項`],
+    ["近", "七日內到期", `${dueWithinSevenDays.length} 項`],
+    ["考", "最近考試", examLabel],
+    ["成", "作業完成率", `${completionRate}%`]
   ]);
 }
 
 function createAnalysisCards(items) {
   return items.map(([icon, label, value]) => `
     <article class="analysis-card">
-      <span class="analysis-icon" aria-hidden="true">${icon}</span>
-      <span>${label}</span>
-      <strong>${value}</strong>
+      <span class="analysis-icon" aria-hidden="true">${escapeHtml(String(icon))}</span>
+      <span>${escapeHtml(String(label))}</span>
+      <strong>${escapeHtml(String(value))}</strong>
     </article>`).join("");
 }
 
@@ -921,10 +1514,31 @@ function maybeSendClassNotification(liveState) {
 }
 
 function populateSubjectOptions() {
-  const subjects = [...new Set(Object.values(weeklySchedule).flat().map((course) => course.subject))];
+  const subjects = [...new Set([
+    ...Object.values(defaultWeeklySchedule).flat(),
+    ...Object.values(weeklySchedule).flat()
+  ].map((course) => course.subject))];
   document.querySelector("#assignment-subject").innerHTML = subjects
     .map((subject) => `<option value="${escapeHtml(subject)}">${escapeHtml(subject)}</option>`)
     .join("");
+}
+
+function normalizeSchedule(value) {
+  const source = value && typeof value === "object" ? value : createEmptySchedule();
+  return Object.fromEntries([1, 2, 3, 4, 5].map((day) => {
+    const courses = Array.isArray(source[day]) ? source[day] : [];
+    const normalizedCourses = courses
+      .filter((course) => periodTimes.some((time) => time.period === Number(course?.period)))
+      .map((course) => ({
+        period: Number(course.period),
+        subject: String(course.subject || "").trim(),
+        room: String(course.room || "").trim(),
+        teacher: String(course.teacher || "").trim()
+      }))
+      .filter((course) => course.subject)
+      .sort((a, b) => a.period - b.period);
+    return [day, normalizedCourses];
+  }));
 }
 
 function setDefaultFormDates() {
@@ -980,17 +1594,6 @@ function toDateInput(date) {
   return `${year}-${month}-${day}`;
 }
 
-function getLongestConsecutiveRun(numbers) {
-  if (!numbers.length) return 0;
-  let longest = 1;
-  let current = 1;
-  for (let index = 1; index < numbers.length; index += 1) {
-    current = numbers[index] === numbers[index - 1] + 1 ? current + 1 : 1;
-    longest = Math.max(longest, current);
-  }
-  return longest;
-}
-
 function formatMinutes(minutes) {
   if (minutes >= 60) {
     const hours = Math.floor(minutes / 60);
@@ -1018,11 +1621,19 @@ function loadStorage(key, fallback) {
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : fallback;
+    if (Array.isArray(fallback)) return Array.isArray(parsed) ? parsed : fallback;
+    if (fallback && typeof fallback === "object") {
+      return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : fallback;
+    }
+    return parsed ?? fallback;
   } catch (error) {
     console.warn(`讀取 ${key} 失敗，已使用預設資料。`, error);
     return fallback;
   }
+}
+
+function createEmptySchedule() {
+  return { 1: [], 2: [], 3: [], 4: [], 5: [] };
 }
 
 function saveStorage(key, value) {
@@ -1044,7 +1655,7 @@ function createDefaultAssignments() {
 
 function createDefaultExams() {
   return [
-    { id: "demo-e1", type: "段考", name: "第一次段考", date: toDateInput(addDays(new Date(), 18)) },
+    { id: "demo-e1", type: "第一次段考", name: "國文、英文與數學", date: toDateInput(addDays(new Date(), 18)) },
     { id: "demo-e2", type: "模擬考", name: "全校模擬考", date: toDateInput(addDays(new Date(), 42)) },
     { id: "demo-e3", type: "學測", name: "學科能力測驗", date: toDateInput(addDays(new Date(), 168)) }
   ];

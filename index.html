@@ -18,13 +18,15 @@
         try {
           const savedTheme = localStorage.getItem("campusFlowTheme");
           const systemTheme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-          document.documentElement.dataset.theme = savedTheme || systemTheme;
+          document.documentElement.dataset.theme =
+            savedTheme === "light" || savedTheme === "dark" ? savedTheme : systemTheme;
         } catch {
-          document.documentElement.dataset.theme = "light";
+          document.documentElement.dataset.theme =
+            matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
         }
       })();
     </script>
-    <link rel="stylesheet" href="style.css?v=12" />
+    <link rel="stylesheet" href="style.css?v=13" />
   </head>
   <body>
     <a class="skip-link" href="#main-content">跳到主要內容</a>
@@ -44,9 +46,9 @@
           <a href="#devices">裝置管理</a>
         </div>
         <div class="header-actions">
-          <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切換為黑夜模式" aria-pressed="false">
-            <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true">☀</span>
-            <span class="theme-toggle-label" id="theme-toggle-label">白天</span>
+          <button class="theme-toggle" id="theme-toggle" type="button" aria-label="目前跟隨系統，點擊切換為白天模式">
+            <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true">◐</span>
+            <span class="theme-toggle-label" id="theme-toggle-label">系統</span>
           </button>
           <button class="menu-toggle" type="button" aria-label="開啟導覽選單" aria-expanded="false" aria-controls="nav-links">
             <span></span><span></span><span></span>
@@ -71,7 +73,7 @@
               <button class="button button-primary" id="auth-button" type="button" aria-label="使用 Google 帳號登入並同步資料">
                 Google 登入同步
               </button>
-              <p class="sync-status" id="auth-status" role="status" aria-live="polite">目前儲存在這台裝置</p>
+              <p class="sync-status" id="auth-status" role="status" aria-live="polite">登入後自動備份，換手機資料也不會不見</p>
             </div>
           </div>
 
@@ -132,9 +134,14 @@
               <h2 id="schedule-title">每週課表</h2>
               <p>點選任何課程即可編輯；點選空堂可直接新增課程，修改後會自動儲存與同步。</p>
             </div>
-            <div class="legend" aria-label="課表狀態說明">
-              <span><i class="legend-dot current"></i>目前課程</span>
-              <span><i class="legend-dot next"></i>下一節課</span>
+            <div class="schedule-heading-actions">
+              <button class="button button-secondary sample-schedule-button" id="import-sample-schedule" type="button" hidden>
+                匯入範例課表
+              </button>
+              <div class="legend" aria-label="課表狀態說明">
+                <span><i class="legend-dot current"></i>目前課程</span>
+                <span><i class="legend-dot next"></i>下一節課</span>
+              </div>
             </div>
           </div>
           <div class="table-wrap" tabindex="0" aria-label="每週課表，可左右捲動">
@@ -303,13 +310,15 @@
         <input type="hidden" id="exam-id" />
         <label for="exam-type">考試類型</label>
         <select id="exam-type">
-          <option>段考</option>
+          <option>第一次段考</option>
+          <option>第二次段考</option>
+          <option>第三次段考</option>
           <option>模擬考</option>
           <option>學測</option>
           <option>其他考試</option>
         </select>
         <label for="exam-name">考試名稱</label>
-        <input id="exam-name" type="text" maxlength="50" placeholder="例如：第一次段考" required />
+        <input id="exam-name" type="text" maxlength="50" placeholder="例如：數學、國文與英文" required />
         <p class="field-error" id="exam-name-error"></p>
         <label for="exam-date">考試日期</label>
         <input id="exam-date" type="date" required />
@@ -321,7 +330,29 @@
       </form>
     </dialog>
 
+    <dialog class="modal login-guide-modal" id="login-guide-modal" aria-labelledby="login-guide-title">
+      <div>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">GOOGLE SYNC</p>
+            <h2 id="login-guide-title">登入後，換手機也接得上</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" aria-label="關閉登入說明">×</button>
+        </div>
+        <p class="login-guide-copy">使用同一個 Google 帳號登入，課表、作業與考試會自動備份到雲端。</p>
+        <ul class="login-benefit-list">
+          <li><span aria-hidden="true">✓</span><div><strong>手機與電腦同步</strong><small>兩邊登入同一帳號，即可看到相同資料。</small></div></li>
+          <li><span aria-hidden="true">✓</span><div><strong>換裝置不怕遺失</strong><small>重新登入後，雲端資料會自動載入。</small></div></li>
+          <li><span aria-hidden="true">✓</span><div><strong>只有你能讀取</strong><small>資料依 Google 帳號分開保存。</small></div></li>
+        </ul>
+        <div class="form-actions">
+          <button class="button button-secondary modal-close" type="button">稍後再說</button>
+          <button class="button button-primary" id="login-guide-continue" type="button">繼續 Google 登入</button>
+        </div>
+      </div>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="script.js?v=12"></script>
+    <script type="module" src="script.js?v=13"></script>
   </body>
 </html>

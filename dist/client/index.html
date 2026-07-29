@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#f4f7fb" />
+    <meta name="theme-color" id="theme-color-meta" content="#f4f7fb" />
     <meta name="description" content="適合高中生的智慧校園課表、作業與考試管理系統" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
@@ -12,7 +12,21 @@
     <link rel="icon" type="image/png" href="app-icon.png" />
     <link rel="apple-touch-icon" href="app-icon.png" />
     <link rel="manifest" href="site.webmanifest" />
-    <link rel="stylesheet" href="style.css" />
+    <script>
+      // 在畫面繪製前套用主題，避免深色模式載入時短暫閃白。
+      (() => {
+        try {
+          const savedTheme = localStorage.getItem("campusFlowTheme");
+          const systemTheme = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          document.documentElement.dataset.theme =
+            savedTheme === "light" || savedTheme === "dark" ? savedTheme : systemTheme;
+        } catch {
+          document.documentElement.dataset.theme =
+            matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="style.css?v=13" />
   </head>
   <body>
     <a class="skip-link" href="#main-content">跳到主要內容</a>
@@ -23,15 +37,22 @@
           <img class="brand-mark" src="app-icon.png" alt="" width="40" height="40" />
           <span>校園日程<small>Campus Flow</small></span>
         </a>
-        <button class="menu-toggle" type="button" aria-label="開啟導覽選單" aria-expanded="false" aria-controls="nav-links">
-          <span></span><span></span><span></span>
-        </button>
         <div class="nav-links" id="nav-links">
           <a href="#today">今日課程</a>
           <a href="#schedule">每週課表</a>
           <a href="#assignments">作業管理</a>
           <a href="#exams">考試倒數</a>
-          <a href="#free-periods">空堂分析</a>
+          <a href="#learning-overview">學習總覽</a>
+          <a href="#devices">裝置管理</a>
+        </div>
+        <div class="header-actions">
+          <button class="theme-toggle" id="theme-toggle" type="button" aria-label="目前跟隨系統，點擊切換為白天模式">
+            <span class="theme-toggle-icon" id="theme-toggle-icon" aria-hidden="true">◐</span>
+            <span class="theme-toggle-label" id="theme-toggle-label">系統</span>
+          </button>
+          <button class="menu-toggle" type="button" aria-label="開啟導覽選單" aria-expanded="false" aria-controls="nav-links">
+            <span></span><span></span><span></span>
+          </button>
         </div>
       </nav>
     </header>
@@ -46,13 +67,13 @@
               <p class="hero-copy">把課程、作業與考試放在同一個清楚的畫面，專注做好眼前的事。</p>
             </div>
             <div class="hero-actions">
-              <button class="button button-light" id="notification-button" type="button" aria-label="開啟課程背景通知">
+              <button class="button button-light" id="notification-button" type="button" aria-label="開啟校園日程背景通知">
                 <span aria-hidden="true">◉</span> 開啟背景通知
               </button>
               <button class="button button-primary" id="auth-button" type="button" aria-label="使用 Google 帳號登入並同步資料">
                 Google 登入同步
               </button>
-              <p class="sync-status" id="auth-status" role="status" aria-live="polite">目前儲存在這台裝置</p>
+              <p class="sync-status" id="auth-status" role="status" aria-live="polite">登入後自動備份，換手機資料也不會不見</p>
             </div>
           </div>
 
@@ -78,6 +99,22 @@
             </article>
           </div>
 
+          <article class="gsat-home-card" id="gsat-home-card" aria-live="polite">
+            <div class="gsat-home-heading">
+              <p class="section-kicker">GSAT COUNTDOWN</p>
+              <h2 id="gsat-home-title">學測倒數</h2>
+              <p id="gsat-home-date">正在確認學測日期…</p>
+            </div>
+            <div class="gsat-home-count">
+              <strong id="gsat-home-days">—</strong>
+              <span id="gsat-home-unit">天</span>
+            </div>
+            <div class="gsat-home-action">
+              <p id="gsat-home-message">每天前進一點，累積成考場上的底氣。</p>
+              <button class="button button-light" id="gsat-manage-button" type="button">設定學測日期</button>
+            </div>
+          </article>
+
           <aside class="reminder-bar" id="course-reminder" aria-live="polite">
             <span class="reminder-icon" aria-hidden="true">!</span>
             <div>
@@ -95,11 +132,16 @@
             <div>
               <p class="section-kicker">WEEKLY PLAN</p>
               <h2 id="schedule-title">每週課表</h2>
-              <p>高雄市立三民高中 305 班暑輔課表，點選課程可查看完整資訊。</p>
+              <p>點選任何課程即可編輯；點選空堂可直接新增課程，修改後會自動儲存與同步。</p>
             </div>
-            <div class="legend" aria-label="課表狀態說明">
-              <span><i class="legend-dot current"></i>目前課程</span>
-              <span><i class="legend-dot next"></i>下一節課</span>
+            <div class="schedule-heading-actions">
+              <button class="button button-secondary sample-schedule-button" id="import-sample-schedule" type="button" hidden>
+                匯入範例課表
+              </button>
+              <div class="legend" aria-label="課表狀態說明">
+                <span><i class="legend-dot current"></i>目前課程</span>
+                <span><i class="legend-dot next"></i>下一節課</span>
+              </div>
             </div>
           </div>
           <div class="table-wrap" tabindex="0" aria-label="每週課表，可左右捲動">
@@ -127,7 +169,7 @@
             <div>
               <p class="section-kicker">TO-DO</p>
               <h2 id="assignments-title">作業管理</h2>
-              <p>依期限自動排序，完成一件就少一件。</p>
+              <p>依期限自動排序；已完成作業保留 30 天後會自動清除。</p>
             </div>
             <button class="button button-primary" id="add-assignment-button" type="button">＋ 新增作業</button>
           </div>
@@ -150,16 +192,48 @@
         </div>
       </section>
 
-      <section class="section muted-section" id="free-periods" aria-labelledby="free-title">
+      <section class="section muted-section" id="learning-overview" aria-labelledby="learning-overview-title">
         <div class="container">
           <div class="section-heading">
             <div>
-              <p class="section-kicker">SMART STUDY</p>
-              <h2 id="free-title">空堂分析</h2>
-              <p>讓零碎時間成為能完成小任務的專注時段。</p>
+              <p class="section-kicker">STUDY DASHBOARD</p>
+              <h2 id="learning-overview-title">學習總覽</h2>
+              <p>快速掌握待完成作業、七日內期限、最近考試與目前完成進度。</p>
             </div>
           </div>
-          <div class="analysis-grid" id="free-period-analysis" aria-live="polite"></div>
+          <div class="analysis-grid" id="learning-overview-grid" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="section" id="devices" aria-labelledby="devices-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">SYNC & DEVICES</p>
+              <h2 id="devices-title">同步與裝置管理</h2>
+              <p>查看已啟用背景通知的手機與電腦，確認最後連線時間，並移除不再使用的裝置。</p>
+            </div>
+            <button class="button button-primary" id="refresh-device-button" type="button">
+              更新這台裝置
+            </button>
+          </div>
+
+          <div class="device-summary-grid" aria-live="polite">
+            <article class="device-summary-card">
+              <span>通知裝置</span>
+              <strong id="device-count">0 台</strong>
+              <p id="device-count-note">登入後即可查看</p>
+            </article>
+            <article class="device-summary-card">
+              <span>資料同步</span>
+              <strong id="device-sync-state">尚未登入</strong>
+              <p id="device-sync-note">使用 Google 帳號同步課表、作業與考試</p>
+            </article>
+          </div>
+
+          <div class="device-list" id="device-list" aria-live="polite">
+            <div class="empty-state">請先登入 Google 帳號，即可查看同步與通知裝置。</div>
+          </div>
         </div>
       </section>
     </main>
@@ -172,14 +246,31 @@
     </footer>
 
     <dialog class="modal" id="course-modal" aria-labelledby="course-modal-title">
-      <div class="modal-header">
-        <div>
-          <p class="section-kicker">COURSE DETAIL</p>
-          <h2 id="course-modal-title">課程資訊</h2>
+      <form id="course-form" novalidate>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">COURSE EDITOR</p>
+            <h2 id="course-modal-title">編輯課程</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" aria-label="關閉課程表單">×</button>
         </div>
-        <button class="icon-button modal-close" type="button" aria-label="關閉課程資訊">×</button>
-      </div>
-      <div class="course-detail" id="course-detail"></div>
+        <input type="hidden" id="course-day" />
+        <input type="hidden" id="course-period" />
+        <p class="course-slot" id="course-slot"></p>
+        <label for="course-subject">科目名稱</label>
+        <input id="course-subject" type="text" maxlength="40" placeholder="例如：數學輔導" required />
+        <label for="course-room">教室</label>
+        <input id="course-room" type="text" maxlength="30" placeholder="例如：305 教室" required />
+        <label for="course-teacher">任課老師</label>
+        <input id="course-teacher" type="text" maxlength="30" placeholder="例如：李老師" required />
+        <p class="field-error" id="course-error"></p>
+        <div class="form-actions course-form-actions">
+          <button class="button button-danger" id="delete-course-button" type="button">刪除課程</button>
+          <span class="form-action-spacer"></span>
+          <button class="button button-secondary modal-close" type="button">取消</button>
+          <button class="button button-primary" type="submit">儲存課程</button>
+        </div>
+      </form>
     </dialog>
 
     <dialog class="modal" id="assignment-modal" aria-labelledby="assignment-modal-title">
@@ -219,13 +310,15 @@
         <input type="hidden" id="exam-id" />
         <label for="exam-type">考試類型</label>
         <select id="exam-type">
-          <option>段考</option>
+          <option>第一次段考</option>
+          <option>第二次段考</option>
+          <option>第三次段考</option>
           <option>模擬考</option>
           <option>學測</option>
           <option>其他考試</option>
         </select>
         <label for="exam-name">考試名稱</label>
-        <input id="exam-name" type="text" maxlength="50" placeholder="例如：第一次段考" required />
+        <input id="exam-name" type="text" maxlength="50" placeholder="例如：數學、國文與英文" required />
         <p class="field-error" id="exam-name-error"></p>
         <label for="exam-date">考試日期</label>
         <input id="exam-date" type="date" required />
@@ -237,7 +330,29 @@
       </form>
     </dialog>
 
+    <dialog class="modal login-guide-modal" id="login-guide-modal" aria-labelledby="login-guide-title">
+      <div>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">GOOGLE SYNC</p>
+            <h2 id="login-guide-title">登入後，換手機也接得上</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" aria-label="關閉登入說明">×</button>
+        </div>
+        <p class="login-guide-copy">使用同一個 Google 帳號登入，課表、作業與考試會自動備份到雲端。</p>
+        <ul class="login-benefit-list">
+          <li><span aria-hidden="true">✓</span><div><strong>手機與電腦同步</strong><small>兩邊登入同一帳號，即可看到相同資料。</small></div></li>
+          <li><span aria-hidden="true">✓</span><div><strong>換裝置不怕遺失</strong><small>重新登入後，雲端資料會自動載入。</small></div></li>
+          <li><span aria-hidden="true">✓</span><div><strong>只有你能讀取</strong><small>資料依 Google 帳號分開保存。</small></div></li>
+        </ul>
+        <div class="form-actions">
+          <button class="button button-secondary modal-close" type="button">稍後再說</button>
+          <button class="button button-primary" id="login-guide-continue" type="button">繼續 Google 登入</button>
+        </div>
+      </div>
+    </dialog>
+
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="script.js"></script>
+    <script type="module" src="script.js?v=13"></script>
   </body>
 </html>

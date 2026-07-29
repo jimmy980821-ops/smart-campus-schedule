@@ -1,11 +1,11 @@
 /* global firebase */
 
-const CACHE_NAME = "campus-flow-v3";
+const CACHE_NAME = "campus-flow-v13";
 const APP_FILES = [
   "./",
   "./index.html",
-  "./style.css",
-  "./script.js",
+  "./style.css?v=13",
+  "./script.js?v=13",
   "./site.webmanifest",
   "./app-icon.png"
 ];
@@ -64,6 +64,24 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  // 程式與樣式採網路優先，避免新版頁面搭配到舊版 JavaScript。
+  const requestUrl = new URL(event.request.url);
+  const isVersionSensitiveAsset = [".js", ".css", ".html", ".webmanifest"]
+    .some((extension) => requestUrl.pathname.endsWith(extension));
+
+  if (isVersionSensitiveAsset) {
+    event.respondWith(
+      fetch(event.request)
+        .then(async (response) => {
+          const cache = await caches.open(CACHE_NAME);
+          await cache.put(event.request, response.clone());
+          return response;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => cached || fetch(event.request).then((response) => {
       const copy = response.clone();
@@ -76,7 +94,7 @@ self.addEventListener("fetch", (event) => {
 messaging.onBackgroundMessage((payload) => {
   const data = payload.data || {};
   return self.registration.showNotification(data.title || "校園日程提醒", {
-    body: data.body || "有新的課程提醒。",
+    body: data.body || "有新的校園日程提醒。",
     icon: data.icon || "./app-icon.png",
     badge: "./app-icon.png",
     tag: data.tag || "campus-flow-reminder",
