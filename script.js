@@ -122,6 +122,8 @@ const STORAGE_KEYS = {
 };
 
 const COMPLETED_ASSIGNMENT_RETENTION_DAYS = 30;
+const DEVICE_ONLINE_WINDOW_MS = 5 * 60 * 1000;
+const DEVICE_HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
 const weekdayNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
 const shortDateFormatter = new Intl.DateTimeFormat("zh-TW", { month: "long", day: "numeric", weekday: "long" });
 const fullDateFormatter = new Intl.DateTimeFormat("zh-TW", { year: "numeric", month: "long", day: "numeric" });
@@ -144,6 +146,7 @@ let cloudUnsubscribers = [];
 let messaging = null;
 let serviceWorkerRegistration = null;
 let maintenanceTimer = null;
+let devicePresenceTimer = null;
 
 const elements = {
   todayDate: document.querySelector("#today-date"),
@@ -212,6 +215,10 @@ function init() {
   initializeCloudSync();
   notificationTimer = window.setInterval(updateLiveCourseState, 30000);
   maintenanceTimer = window.setInterval(cleanupCompletedAssignments, 60 * 60 * 1000);
+  devicePresenceTimer = window.setInterval(() => {
+    updateDevicePresence();
+    renderDeviceManagement();
+  }, DEVICE_HEARTBEAT_INTERVAL_MS);
 }
 
 function bindEvents() {
@@ -233,6 +240,11 @@ function bindEvents() {
     if (event.target.matches("a")) closeMenu();
   });
 
+  document.addEventListener("visibilitychange", () => {
+    updateDevicePresence(document.visibilityState === "visible");
+    renderDeviceManagement();
+  });
+
   document.querySelectorAll(".modal-close").forEach((button) => {
     button.addEventListener("click", () => button.closest("dialog").close());
   });
@@ -246,6 +258,8 @@ function bindEvents() {
   window.addEventListener("beforeunload", () => {
     if (notificationTimer) window.clearInterval(notificationTimer);
     if (maintenanceTimer) window.clearInterval(maintenanceTimer);
+    if (devicePresenceTimer) window.clearInterval(devicePresenceTimer);
+    updateDevicePresence(false);
     stopCloudListeners();
   });
 }
@@ -573,6 +587,7 @@ async function registerPushDevice() {
 
   const previousDeviceId = getCurrentDeviceId();
   const deviceId = await hashText(token);
+  const now = Date.now();
   await setDoc(doc(database, "pushDevices", deviceId), {
     uid: currentUser.uid,
     token,
@@ -580,7 +595,9 @@ async function registerPushDevice() {
     browser: getBrowserLabel(),
     installMode: isStandalonePwa() ? "主畫面 App" : "瀏覽器",
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Taipei",
-    updatedAt: Date.now()
+    updatedAt: now,
+    lastSeenAt: now,
+    online: true
   }, { merge: true });
   setCurrentDeviceId(deviceId);
 
@@ -594,11 +611,30 @@ async function registerPushDevice() {
   return token;
 }
 
+async function updateDevicePresence(isOnline = document.visibilityState === "visible") {
+  const deviceId = getCurrentDeviceId();
+  if (!deviceId || !currentUser || !navigator.onLine) return;
+
+  try {
+    await setDoc(doc(database, "pushDevices", deviceId), {
+      uid: currentUser.uid,
+      platform: getDeviceLabel(),
+      browser: getBrowserLabel(),
+      installMode: isStandalonePwa() ? "主畫面 App" : "瀏覽器",
+      lastSeenAt: Date.now(),
+      online: Boolean(isOnline)
+    }, { merge: true });
+  } catch (error) {
+    console.warn("Device presence update failed:", error);
+  }
+}
+
 async function refreshExistingPushToken() {
   if (!("Notification" in window) || Notification.permission !== "granted" || !messaging || !currentUser) return;
   try {
     const token = await registerPushDevice();
     if (token) {
+      await updateDevicePresence(true);
       elements.notificationButton.textContent = "背景通知已開啟";
       elements.notificationMessage.textContent = "此裝置已啟用課程、作業與學測背景提醒。";
     }
@@ -686,9 +722,10 @@ function renderDeviceManagement() {
   }
 
   const currentDeviceId = getCurrentDeviceId();
+  const onlineDeviceCount = pushDevices.filter(isDeviceOnline).length;
   elements.deviceCount.textContent = `${pushDevices.length} 台`;
   elements.deviceCountNote.textContent = pushDevices.length
-    ? "已啟用課程、作業與學測通知"
+    ? `${onlineDeviceCount} 台在線・皆已啟用背景通知`
     : "目前沒有啟用背景通知的裝置";
   elements.deviceSyncState.textContent = "即時同步中";
   elements.deviceSyncNote.textContent = currentUser.email || currentUser.displayName || "Google 帳號";
@@ -703,18 +740,22 @@ function renderDeviceManagement() {
     const platform = device.platform || "未知裝置";
     const browser = device.browser || "瀏覽器";
     const installMode = device.installMode || "網頁";
-    const statusText = isCurrentDevice ? "這台裝置" : "背景通知";
+    const isOnline = isDeviceOnline(device);
+    const lastSeenAt = device.lastSeenAt || device.updatedAt;
 
     return `
-      <article class="device-card${isCurrentDevice ? " current-device" : ""}">
+      <article class="device-card${isCurrentDevice ? " current-device" : ""}${isOnline ? " online-device" : ""}">
         <span class="device-type" aria-hidden="true">${escapeHtml(getDeviceShortCode(platform))}</span>
         <div class="device-card-body">
           <div class="device-card-heading">
             <h3>${escapeHtml(platform)}</h3>
-            <span class="device-status${isCurrentDevice ? " is-current" : ""}">${statusText}</span>
+            <span class="device-status ${isOnline ? "is-online" : "is-offline"}">
+              <i aria-hidden="true"></i>${isOnline ? "在線中" : "離線"}
+            </span>
+            ${isCurrentDevice ? '<span class="device-status is-current">這台裝置</span>' : ""}
           </div>
           <p>${escapeHtml(browser)} · ${escapeHtml(installMode)}</p>
-          <small>最後連線：${escapeHtml(formatDeviceUpdatedAt(device.updatedAt))}</small>
+          <small>${isOnline ? "目前使用中" : `最後連線：${escapeHtml(formatDeviceUpdatedAt(lastSeenAt))}`}</small>
         </div>
         <button
           class="button button-secondary device-remove-button"
@@ -727,6 +768,13 @@ function renderDeviceManagement() {
       </article>
     `;
   }).join("");
+}
+
+function isDeviceOnline(device) {
+  const lastSeenAt = Number(device?.lastSeenAt || device?.updatedAt);
+  return device?.online !== false
+    && Number.isFinite(lastSeenAt)
+    && Date.now() - lastSeenAt <= DEVICE_ONLINE_WINDOW_MS;
 }
 
 async function showForegroundPushMessage(payload) {
