@@ -13,7 +13,9 @@ import {
   getDocs,
   getFirestore,
   onSnapshot,
+  query,
   setDoc,
+  where,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-firestore.js";
 import {
@@ -120,9 +122,16 @@ const STORAGE_KEYS = {
 const weekdayNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
 const shortDateFormatter = new Intl.DateTimeFormat("zh-TW", { month: "long", day: "numeric", weekday: "long" });
 const fullDateFormatter = new Intl.DateTimeFormat("zh-TW", { year: "numeric", month: "long", day: "numeric" });
+const deviceDateTimeFormatter = new Intl.DateTimeFormat("zh-TW", {
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit"
+});
 
 let assignments = loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments());
 let exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
+let pushDevices = [];
 let notificationTimer = null;
 let toastTimer = null;
 let notifiedCourseKey = "";
@@ -151,6 +160,12 @@ const elements = {
   assignmentList: document.querySelector("#assignment-list"),
   examList: document.querySelector("#exam-list"),
   learningOverview: document.querySelector("#learning-overview-grid"),
+  deviceCount: document.querySelector("#device-count"),
+  deviceCountNote: document.querySelector("#device-count-note"),
+  deviceSyncState: document.querySelector("#device-sync-state"),
+  deviceSyncNote: document.querySelector("#device-sync-note"),
+  deviceList: document.querySelector("#device-list"),
+  refreshDeviceButton: document.querySelector("#refresh-device-button"),
   gsatCard: document.querySelector("#gsat-home-card"),
   gsatTitle: document.querySelector("#gsat-home-title"),
   gsatDate: document.querySelector("#gsat-home-date"),
@@ -180,6 +195,7 @@ function init() {
   renderSchedule();
   renderAssignments();
   renderExams();
+  renderDeviceManagement();
   updateLiveCourseState();
   bindEvents();
   setDefaultFormDates();
@@ -194,6 +210,8 @@ function bindEvents() {
   elements.assignmentForm.addEventListener("submit", saveAssignment);
   elements.examForm.addEventListener("submit", saveExam);
   elements.notificationButton.addEventListener("click", enableBackgroundNotifications);
+  elements.refreshDeviceButton.addEventListener("click", refreshCurrentDevice);
+  elements.deviceList.addEventListener("click", handleDeviceAction);
   elements.authButton.addEventListener("click", handleAuthButton);
   elements.themeButton.addEventListener("click", toggleTheme);
   elements.gsatManageButton.addEventListener("click", openGsatExamModal);
@@ -267,6 +285,7 @@ function getSavedTheme() {
 function initializeCloudSync() {
   onAuthStateChanged(auth, async (user) => {
     stopCloudListeners();
+    pushDevices = [];
     currentUser = user;
     updateAuthInterface();
 
@@ -275,6 +294,7 @@ function initializeCloudSync() {
       exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
       renderAssignments();
       renderExams();
+      renderDeviceManagement();
       return;
     }
 
@@ -323,6 +343,7 @@ function updateAuthInterface() {
     elements.authButton.setAttribute("aria-label", "使用 Google 帳號登入並同步資料");
     setSyncStatus("目前儲存在這台裝置");
   }
+  renderDeviceManagement();
 }
 
 function setSyncStatus(message, isSynced = false) {
@@ -373,7 +394,17 @@ function startCloudListeners(userId) {
       exams = items;
       saveStorage(STORAGE_KEYS.exams, exams);
       renderExams();
-    })
+    }),
+    onSnapshot(
+      query(collection(database, "pushDevices"), where("uid", "==", userId)),
+      (snapshot) => {
+        pushDevices = snapshot.docs
+          .map((itemDocument) => ({ ...itemDocument.data(), id: itemDocument.id }))
+          .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+        renderDeviceManagement();
+      },
+      handleCloudError
+    )
   ];
 }
 
@@ -405,6 +436,10 @@ async function deleteCloudRecord(collectionName, id) {
 
 function handleCloudError(error) {
   setSyncStatus("雲端同步暫時失敗，資料仍保存在本機");
+  if (elements.deviceSyncState) {
+    elements.deviceSyncState.textContent = "同步異常";
+    elements.deviceSyncNote.textContent = "請檢查網路後重新整理";
+  }
   console.error("Firebase sync failed:", error);
 }
 
@@ -484,14 +519,26 @@ async function registerPushDevice() {
   });
   if (!token) return "";
 
+  const previousDeviceId = getCurrentDeviceId();
   const deviceId = await hashText(token);
   await setDoc(doc(database, "pushDevices", deviceId), {
     uid: currentUser.uid,
     token,
     platform: getDeviceLabel(),
+    browser: getBrowserLabel(),
+    installMode: isStandalonePwa() ? "主畫面 App" : "瀏覽器",
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Taipei",
     updatedAt: Date.now()
-  });
-  localStorage.setItem("campusFlowPushDeviceId", deviceId);
+  }, { merge: true });
+  setCurrentDeviceId(deviceId);
+
+  if (previousDeviceId && previousDeviceId !== deviceId) {
+    try {
+      await deleteDoc(doc(database, "pushDevices", previousDeviceId));
+    } catch (error) {
+      console.warn("Old push device cleanup failed:", error);
+    }
+  }
   return token;
 }
 
@@ -509,14 +556,125 @@ async function refreshExistingPushToken() {
 }
 
 async function removeCurrentPushDevice() {
-  const deviceId = localStorage.getItem("campusFlowPushDeviceId");
+  const deviceId = getCurrentDeviceId();
   if (!deviceId || !currentUser) return;
   try {
     await deleteDoc(doc(database, "pushDevices", deviceId));
-    localStorage.removeItem("campusFlowPushDeviceId");
+    clearCurrentDeviceId();
   } catch (error) {
     console.warn("Push device removal failed:", error);
   }
+}
+
+async function refreshCurrentDevice() {
+  if (!currentUser) {
+    showToast("請先登入 Google 帳號");
+    return;
+  }
+
+  if (!("Notification" in window) || Notification.permission !== "granted") {
+    await enableBackgroundNotifications();
+    return;
+  }
+
+  elements.refreshDeviceButton.disabled = true;
+  try {
+    const token = await registerPushDevice();
+    if (!token) throw new Error("FCM did not return a registration token.");
+    showToast("這台裝置已更新");
+  } catch (error) {
+    showToast("裝置更新失敗，請稍後再試");
+    console.error("Push device refresh failed:", error);
+  } finally {
+    elements.refreshDeviceButton.disabled = false;
+  }
+}
+
+async function handleDeviceAction(event) {
+  const button = event.target.closest("button[data-device-action]");
+  if (!button || !currentUser) return;
+
+  const deviceId = button.dataset.deviceId;
+  const device = pushDevices.find((item) => item.id === deviceId);
+  if (!device) return;
+
+  const isCurrentDevice = deviceId === getCurrentDeviceId();
+  const confirmation = isCurrentDevice
+    ? "移除這台裝置後，將不再收到背景通知。確定要移除嗎？"
+    : `確定要移除「${device.platform || "未命名裝置"}」嗎？`;
+  if (!window.confirm(confirmation)) return;
+
+  button.disabled = true;
+  try {
+    await deleteDoc(doc(database, "pushDevices", deviceId));
+    if (isCurrentDevice) {
+      clearCurrentDeviceId();
+      elements.notificationButton.textContent = "開啟背景通知";
+      elements.notificationMessage.textContent = "這台裝置的背景通知已關閉，可隨時重新開啟。";
+    }
+    showToast("裝置已移除");
+  } catch (error) {
+    button.disabled = false;
+    showToast("無法移除裝置，請稍後再試");
+    console.error("Push device removal failed:", error);
+  }
+}
+
+function renderDeviceManagement() {
+  if (!elements.deviceList) return;
+
+  elements.refreshDeviceButton.disabled = !currentUser;
+  if (!currentUser) {
+    elements.deviceCount.textContent = "0 台";
+    elements.deviceCountNote.textContent = "登入後即可查看";
+    elements.deviceSyncState.textContent = "尚未登入";
+    elements.deviceSyncNote.textContent = "使用 Google 帳號同步作業與考試";
+    elements.deviceList.innerHTML = '<div class="empty-state">請先登入 Google 帳號，即可查看同步與通知裝置。</div>';
+    return;
+  }
+
+  const currentDeviceId = getCurrentDeviceId();
+  elements.deviceCount.textContent = `${pushDevices.length} 台`;
+  elements.deviceCountNote.textContent = pushDevices.length
+    ? "已啟用課程、作業與學測通知"
+    : "目前沒有啟用背景通知的裝置";
+  elements.deviceSyncState.textContent = "即時同步中";
+  elements.deviceSyncNote.textContent = currentUser.email || currentUser.displayName || "Google 帳號";
+
+  if (!pushDevices.length) {
+    elements.deviceList.innerHTML = '<div class="empty-state">尚未啟用通知裝置。請按「更新這台裝置」完成設定。</div>';
+    return;
+  }
+
+  elements.deviceList.innerHTML = pushDevices.map((device) => {
+    const isCurrentDevice = device.id === currentDeviceId;
+    const platform = device.platform || "未知裝置";
+    const browser = device.browser || "瀏覽器";
+    const installMode = device.installMode || "網頁";
+    const statusText = isCurrentDevice ? "這台裝置" : "背景通知";
+
+    return `
+      <article class="device-card${isCurrentDevice ? " current-device" : ""}">
+        <span class="device-type" aria-hidden="true">${escapeHtml(getDeviceShortCode(platform))}</span>
+        <div class="device-card-body">
+          <div class="device-card-heading">
+            <h3>${escapeHtml(platform)}</h3>
+            <span class="device-status${isCurrentDevice ? " is-current" : ""}">${statusText}</span>
+          </div>
+          <p>${escapeHtml(browser)} · ${escapeHtml(installMode)}</p>
+          <small>最後連線：${escapeHtml(formatDeviceUpdatedAt(device.updatedAt))}</small>
+        </div>
+        <button
+          class="button button-secondary device-remove-button"
+          type="button"
+          data-device-action="remove"
+          data-device-id="${escapeHtml(device.id)}"
+          aria-label="移除 ${escapeHtml(platform)}">
+          移除
+        </button>
+      </article>
+    `;
+  }).join("");
 }
 
 async function showForegroundPushMessage(payload) {
@@ -547,6 +705,53 @@ function getDeviceLabel() {
   if (isIosDevice()) return "iPhone／iPad";
   if (/Android/i.test(navigator.userAgent)) return "Android";
   return "電腦瀏覽器";
+}
+
+function getBrowserLabel() {
+  const userAgent = navigator.userAgent;
+  if (/Edg\//i.test(userAgent)) return "Microsoft Edge";
+  if (/CriOS/i.test(userAgent)) return "Google Chrome";
+  if (/FxiOS/i.test(userAgent)) return "Firefox";
+  if (/Chrome/i.test(userAgent)) return "Google Chrome";
+  if (/Firefox/i.test(userAgent)) return "Firefox";
+  if (/Safari/i.test(userAgent)) return "Safari";
+  return "瀏覽器";
+}
+
+function getDeviceShortCode(platform) {
+  if (/iPhone|iPad/i.test(platform)) return "iOS";
+  if (/Android/i.test(platform)) return "AND";
+  return "WEB";
+}
+
+function formatDeviceUpdatedAt(value) {
+  const timestamp = Number(value);
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return "尚無紀錄";
+  return deviceDateTimeFormatter.format(new Date(timestamp));
+}
+
+function getCurrentDeviceId() {
+  try {
+    return localStorage.getItem("campusFlowPushDeviceId") || "";
+  } catch {
+    return "";
+  }
+}
+
+function setCurrentDeviceId(deviceId) {
+  try {
+    localStorage.setItem("campusFlowPushDeviceId", deviceId);
+  } catch {
+    // 無法使用 localStorage 時仍保留雲端通知註冊。
+  }
+}
+
+function clearCurrentDeviceId() {
+  try {
+    localStorage.removeItem("campusFlowPushDeviceId");
+  } catch {
+    // 無法使用 localStorage 時，雲端裝置資料仍已移除。
+  }
 }
 
 async function hashText(value) {
