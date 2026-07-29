@@ -1066,6 +1066,117 @@ html[data-theme="dark"] .analysis-icon {
   line-height: 1.35;
 }
 
+.device-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.device-summary-card {
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--soft);
+}
+
+.device-summary-card span,
+.device-summary-card p,
+.device-card p,
+.device-card small {
+  color: var(--muted);
+}
+
+.device-summary-card strong {
+  display: block;
+  margin: 4px 0;
+  font-size: 1.65rem;
+}
+
+.device-summary-card p,
+.device-card p {
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.device-list {
+  display: grid;
+  gap: 12px;
+}
+
+.device-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+}
+
+.device-card.current-device {
+  border-color: rgba(49, 95, 188, 0.42);
+  box-shadow: inset 4px 0 var(--primary);
+}
+
+.device-type {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 16px;
+  background: #eaf1ff;
+  color: var(--primary);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+html[data-theme="dark"] .device-type {
+  background: #1c3153;
+}
+
+.device-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.device-card-heading h3 {
+  margin-bottom: 0;
+}
+
+.device-status {
+  display: inline-flex;
+  padding: 3px 9px;
+  border-radius: 99px;
+  background: var(--soft);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.device-status.is-current {
+  background: #e4f3ec;
+  color: #24704e;
+}
+
+html[data-theme="dark"] .device-status.is-current {
+  background: #17382e;
+  color: #80d8b1;
+}
+
+.device-card small {
+  display: block;
+  margin-top: 5px;
+}
+
+.device-remove-button {
+  min-height: 40px;
+  padding: 9px 15px;
+}
+
 .empty-state {
   padding: 38px 20px;
   border: 1px dashed #cbd5e3;
@@ -1363,6 +1474,19 @@ html[data-theme="dark"] .site-footer {
   }
 
   .gsat-home-action .button {
+    width: 100%;
+  }
+
+  .device-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .device-card {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .device-remove-button {
+    grid-column: 1 / -1;
     width: 100%;
   }
 

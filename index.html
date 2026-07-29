@@ -41,6 +41,7 @@
           <a href="#assignments">作業管理</a>
           <a href="#exams">考試倒數</a>
           <a href="#learning-overview">學習總覽</a>
+          <a href="#devices">裝置管理</a>
         </div>
         <div class="header-actions">
           <button class="theme-toggle" id="theme-toggle" type="button" aria-label="切換為黑夜模式" aria-pressed="false">
@@ -194,6 +195,38 @@
             </div>
           </div>
           <div class="analysis-grid" id="learning-overview-grid" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="section" id="devices" aria-labelledby="devices-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <p class="section-kicker">SYNC & DEVICES</p>
+              <h2 id="devices-title">同步與裝置管理</h2>
+              <p>查看已啟用背景通知的手機與電腦，確認最後連線時間，並移除不再使用的裝置。</p>
+            </div>
+            <button class="button button-primary" id="refresh-device-button" type="button">
+              更新這台裝置
+            </button>
+          </div>
+
+          <div class="device-summary-grid" aria-live="polite">
+            <article class="device-summary-card">
+              <span>通知裝置</span>
+              <strong id="device-count">0 台</strong>
+              <p id="device-count-note">登入後即可查看</p>
+            </article>
+            <article class="device-summary-card">
+              <span>資料同步</span>
+              <strong id="device-sync-state">尚未登入</strong>
+              <p id="device-sync-note">使用 Google 帳號同步作業與考試</p>
+            </article>
+          </div>
+
+          <div class="device-list" id="device-list" aria-live="polite">
+            <div class="empty-state">請先登入 Google 帳號，即可查看同步與通知裝置。</div>
+          </div>
         </div>
       </section>
     </main>
