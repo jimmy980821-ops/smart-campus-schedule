@@ -24,7 +24,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="style.css?v=10" />
+    <link rel="stylesheet" href="style.css?v=11" />
   </head>
   <body>
     <a class="skip-link" href="#main-content">跳到主要內容</a>
@@ -130,7 +130,7 @@
             <div>
               <p class="section-kicker">WEEKLY PLAN</p>
               <h2 id="schedule-title">每週課表</h2>
-              <p>高雄市立三民高中 305 班暑輔課表，點選課程可查看完整資訊。</p>
+              <p>點選任何課程即可編輯；點選空堂可直接新增課程，修改後會自動儲存與同步。</p>
             </div>
             <div class="legend" aria-label="課表狀態說明">
               <span><i class="legend-dot current"></i>目前課程</span>
@@ -162,7 +162,7 @@
             <div>
               <p class="section-kicker">TO-DO</p>
               <h2 id="assignments-title">作業管理</h2>
-              <p>依期限自動排序，完成一件就少一件。</p>
+              <p>依期限自動排序；已完成作業保留 30 天後會自動清除。</p>
             </div>
             <button class="button button-primary" id="add-assignment-button" type="button">＋ 新增作業</button>
           </div>
@@ -220,7 +220,7 @@
             <article class="device-summary-card">
               <span>資料同步</span>
               <strong id="device-sync-state">尚未登入</strong>
-              <p id="device-sync-note">使用 Google 帳號同步作業與考試</p>
+              <p id="device-sync-note">使用 Google 帳號同步課表、作業與考試</p>
             </article>
           </div>
 
@@ -239,14 +239,31 @@
     </footer>
 
     <dialog class="modal" id="course-modal" aria-labelledby="course-modal-title">
-      <div class="modal-header">
-        <div>
-          <p class="section-kicker">COURSE DETAIL</p>
-          <h2 id="course-modal-title">課程資訊</h2>
+      <form id="course-form" novalidate>
+        <div class="modal-header">
+          <div>
+            <p class="section-kicker">COURSE EDITOR</p>
+            <h2 id="course-modal-title">編輯課程</h2>
+          </div>
+          <button class="icon-button modal-close" type="button" aria-label="關閉課程表單">×</button>
         </div>
-        <button class="icon-button modal-close" type="button" aria-label="關閉課程資訊">×</button>
-      </div>
-      <div class="course-detail" id="course-detail"></div>
+        <input type="hidden" id="course-day" />
+        <input type="hidden" id="course-period" />
+        <p class="course-slot" id="course-slot"></p>
+        <label for="course-subject">科目名稱</label>
+        <input id="course-subject" type="text" maxlength="40" placeholder="例如：數學輔導" required />
+        <label for="course-room">教室</label>
+        <input id="course-room" type="text" maxlength="30" placeholder="例如：305 教室" required />
+        <label for="course-teacher">任課老師</label>
+        <input id="course-teacher" type="text" maxlength="30" placeholder="例如：李老師" required />
+        <p class="field-error" id="course-error"></p>
+        <div class="form-actions course-form-actions">
+          <button class="button button-danger" id="delete-course-button" type="button">刪除課程</button>
+          <span class="form-action-spacer"></span>
+          <button class="button button-secondary modal-close" type="button">取消</button>
+          <button class="button button-primary" type="submit">儲存課程</button>
+        </div>
+      </form>
     </dialog>
 
     <dialog class="modal" id="assignment-modal" aria-labelledby="assignment-modal-title">
@@ -305,6 +322,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="script.js?v=10"></script>
+    <script type="module" src="script.js?v=11"></script>
   </body>
 </html>
