@@ -118,14 +118,12 @@ const STORAGE_KEYS = {
   assignments: "campusFlowAssignments",
   exams: "campusFlowExams",
   schedule: "campusFlowWeeklySchedule",
-  theme: "campusFlowTheme",
-  pomodoro: "campusFlowPomodoro"
+  theme: "campusFlowTheme"
 };
 
 const COMPLETED_ASSIGNMENT_RETENTION_DAYS = 30;
 const DEVICE_ONLINE_WINDOW_MS = 5 * 60 * 1000;
 const DEVICE_HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000;
-const POMODORO_DURATIONS = { focus: 25 * 60, break: 5 * 60 };
 const weekdayNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
 const shortDateFormatter = new Intl.DateTimeFormat("zh-TW", { month: "long", day: "numeric", weekday: "long" });
 const fullDateFormatter = new Intl.DateTimeFormat("zh-TW", { year: "numeric", month: "long", day: "numeric" });
@@ -139,10 +137,8 @@ const deviceDateTimeFormatter = new Intl.DateTimeFormat("zh-TW", {
 let weeklySchedule = normalizeSchedule(loadStorage(STORAGE_KEYS.schedule, createEmptySchedule()));
 let assignments = removeExpiredCompletedAssignments(loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments()));
 let exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
-let pomodoroState = normalizePomodoroState(loadStorage(STORAGE_KEYS.pomodoro, createDefaultPomodoroState()));
 let pushDevices = [];
 let notificationTimer = null;
-let pomodoroTimer = null;
 let toastTimer = null;
 let notifiedCourseKey = "";
 let currentUser = null;
@@ -171,14 +167,6 @@ const elements = {
   loginGuideContinue: document.querySelector("#login-guide-continue"),
   scheduleBody: document.querySelector("#schedule-body"),
   importSampleScheduleButton: document.querySelector("#import-sample-schedule"),
-  pomodoroRing: document.querySelector("#pomodoro-ring"),
-  pomodoroTime: document.querySelector("#pomodoro-time"),
-  pomodoroRingLabel: document.querySelector("#pomodoro-ring-label"),
-  pomodoroRounds: document.querySelector("#pomodoro-rounds"),
-  pomodoroTarget: document.querySelector("#pomodoro-target"),
-  pomodoroStatus: document.querySelector("#pomodoro-status"),
-  pomodoroToggle: document.querySelector("#pomodoro-toggle"),
-  pomodoroReset: document.querySelector("#pomodoro-reset"),
   assignmentSummary: document.querySelector("#assignment-summary"),
   assignmentList: document.querySelector("#assignment-list"),
   examList: document.querySelector("#exam-list"),
@@ -219,8 +207,6 @@ function init() {
   saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
   saveStorage(STORAGE_KEYS.assignments, assignments);
   populateSubjectOptions();
-  populatePomodoroTargets();
-  initializePomodoro();
   renderSchedule();
   renderAssignments();
   renderExams();
@@ -251,12 +237,6 @@ function bindEvents() {
   elements.authButton.addEventListener("click", handleAuthButton);
   elements.loginGuideContinue.addEventListener("click", signInWithGoogle);
   elements.importSampleScheduleButton.addEventListener("click", importSampleSchedule);
-  elements.pomodoroToggle.addEventListener("click", togglePomodoro);
-  elements.pomodoroReset.addEventListener("click", resetPomodoro);
-  elements.pomodoroTarget.addEventListener("change", savePomodoroTarget);
-  document.querySelectorAll("[data-pomodoro-mode]").forEach((button) => {
-    button.addEventListener("click", () => changePomodoroMode(button.dataset.pomodoroMode));
-  });
   elements.themeButton.addEventListener("click", toggleTheme);
   elements.gsatManageButton.addEventListener("click", openGsatExamModal);
   elements.menuButton.addEventListener("click", toggleMenu);
@@ -284,210 +264,9 @@ function bindEvents() {
     if (notificationTimer) window.clearInterval(notificationTimer);
     if (maintenanceTimer) window.clearInterval(maintenanceTimer);
     if (devicePresenceTimer) window.clearInterval(devicePresenceTimer);
-    if (pomodoroTimer) window.clearInterval(pomodoroTimer);
     updateDevicePresence(false);
     stopCloudListeners();
   });
-}
-
-/* ====================== 番茄鐘 ====================== */
-
-function initializePomodoro() {
-  refreshPomodoroForToday();
-  updatePomodoroRemaining();
-  if (pomodoroState.running && pomodoroState.remainingSeconds <= 0) {
-    completePomodoro();
-  } else {
-    renderPomodoro();
-  }
-  pomodoroTimer = window.setInterval(tickPomodoro, 1000);
-}
-
-function createDefaultPomodoroState() {
-  return {
-    mode: "focus",
-    remainingSeconds: POMODORO_DURATIONS.focus,
-    running: false,
-    endAt: 0,
-    completedRounds: 0,
-    completedDate: toDateInput(new Date()),
-    target: ""
-  };
-}
-
-function normalizePomodoroState(value) {
-  const fallback = createDefaultPomodoroState();
-  if (!value || typeof value !== "object" || Array.isArray(value)) return fallback;
-  const mode = value.mode === "break" ? "break" : "focus";
-  const maximum = POMODORO_DURATIONS[mode];
-  const remainingSeconds = Math.min(
-    maximum,
-    Math.max(0, Number.isFinite(Number(value.remainingSeconds)) ? Math.ceil(Number(value.remainingSeconds)) : maximum)
-  );
-  return {
-    mode,
-    remainingSeconds,
-    running: Boolean(value.running && Number(value.endAt) > 0),
-    endAt: Number(value.endAt) || 0,
-    completedRounds: Math.max(0, Math.floor(Number(value.completedRounds) || 0)),
-    completedDate: String(value.completedDate || fallback.completedDate),
-    target: String(value.target || "")
-  };
-}
-
-function refreshPomodoroForToday() {
-  const today = toDateInput(new Date());
-  if (pomodoroState.completedDate === today) return;
-  pomodoroState.completedDate = today;
-  pomodoroState.completedRounds = 0;
-  savePomodoroState();
-}
-
-function tickPomodoro() {
-  refreshPomodoroForToday();
-  if (!pomodoroState.running) {
-    renderPomodoro();
-    return;
-  }
-
-  updatePomodoroRemaining();
-  if (pomodoroState.remainingSeconds <= 0) {
-    completePomodoro();
-    return;
-  }
-  renderPomodoro();
-}
-
-function updatePomodoroRemaining() {
-  if (!pomodoroState.running || !pomodoroState.endAt) return;
-  pomodoroState.remainingSeconds = Math.max(0, Math.ceil((pomodoroState.endAt - Date.now()) / 1000));
-}
-
-function togglePomodoro() {
-  if (pomodoroState.running) {
-    updatePomodoroRemaining();
-    pomodoroState.running = false;
-    pomodoroState.endAt = 0;
-    savePomodoroState();
-    renderPomodoro();
-    showToast("番茄鐘已暫停");
-    return;
-  }
-
-  if (pomodoroState.remainingSeconds <= 0) {
-    pomodoroState.remainingSeconds = POMODORO_DURATIONS[pomodoroState.mode];
-  }
-  pomodoroState.running = true;
-  pomodoroState.endAt = Date.now() + pomodoroState.remainingSeconds * 1000;
-  savePomodoroState();
-  renderPomodoro();
-  showToast(pomodoroState.mode === "focus" ? "開始專注" : "開始休息");
-}
-
-function resetPomodoro() {
-  pomodoroState.running = false;
-  pomodoroState.endAt = 0;
-  pomodoroState.remainingSeconds = POMODORO_DURATIONS[pomodoroState.mode];
-  savePomodoroState();
-  renderPomodoro();
-  showToast("番茄鐘已重設");
-}
-
-function changePomodoroMode(mode) {
-  if (!POMODORO_DURATIONS[mode] || mode === pomodoroState.mode) return;
-  pomodoroState.mode = mode;
-  pomodoroState.running = false;
-  pomodoroState.endAt = 0;
-  pomodoroState.remainingSeconds = POMODORO_DURATIONS[mode];
-  savePomodoroState();
-  renderPomodoro();
-}
-
-function completePomodoro() {
-  const completedMode = pomodoroState.mode;
-  if (completedMode === "focus") pomodoroState.completedRounds += 1;
-  pomodoroState.mode = completedMode === "focus" ? "break" : "focus";
-  pomodoroState.running = false;
-  pomodoroState.endAt = 0;
-  pomodoroState.remainingSeconds = POMODORO_DURATIONS[pomodoroState.mode];
-  savePomodoroState();
-  renderPomodoro();
-
-  const message = completedMode === "focus"
-    ? "專注完成，休息 5 分鐘吧！"
-    : "休息結束，準備開始下一輪。";
-  showToast(message);
-  if ("Notification" in window && Notification.permission === "granted") {
-    new Notification("校園日程番茄鐘", {
-      body: message,
-      icon: "./app-icon.png",
-      tag: "campus-flow-pomodoro"
-    });
-  }
-}
-
-function renderPomodoro() {
-  const duration = POMODORO_DURATIONS[pomodoroState.mode];
-  const remaining = Math.min(duration, Math.max(0, pomodoroState.remainingSeconds));
-  const progress = Math.min(1, Math.max(0, 1 - remaining / duration));
-  const minutes = Math.floor(remaining / 60);
-  const seconds = remaining % 60;
-  const isFocus = pomodoroState.mode === "focus";
-
-  elements.pomodoroTime.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  elements.pomodoroRingLabel.textContent = isFocus ? "專注時間" : "休息時間";
-  elements.pomodoroRing.setAttribute("aria-label", `番茄鐘剩餘 ${minutes} 分 ${seconds} 秒`);
-  elements.pomodoroRounds.textContent = `今日完成 ${pomodoroState.completedRounds} 輪`;
-  elements.pomodoroRing.style.setProperty("--pomodoro-progress", `${progress * 360}deg`);
-  elements.pomodoroRing.classList.toggle("is-break", !isFocus);
-  elements.pomodoroToggle.textContent = pomodoroState.running
-    ? "暫停"
-    : isFocus ? "開始專注" : "開始休息";
-  elements.pomodoroStatus.textContent = pomodoroState.running
-    ? `${isFocus ? "保持專注" : "安心休息"}，時間到會提醒你。`
-    : isFocus ? "準備好後，開始這一輪專注。" : "離開螢幕、喝口水，讓大腦休息一下。";
-
-  document.querySelectorAll("[data-pomodoro-mode]").forEach((button) => {
-    const active = button.dataset.pomodoroMode === pomodoroState.mode;
-    button.classList.toggle("active", active);
-    button.setAttribute("aria-pressed", String(active));
-  });
-  if (elements.pomodoroTarget.value !== pomodoroState.target) {
-    elements.pomodoroTarget.value = pomodoroState.target;
-    if (elements.pomodoroTarget.value !== pomodoroState.target) {
-      pomodoroState.target = "";
-      elements.pomodoroTarget.value = "";
-    }
-  }
-}
-
-function populatePomodoroTargets() {
-  const todayCourses = weeklySchedule[new Date().getDay()] || [];
-  const options = [
-    ["", "自由專注"],
-    ...todayCourses.map((course) => [`course:${course.subject}`, `今日課程｜${course.subject}`]),
-    ...assignments
-      .filter((assignment) => !assignment.completed)
-      .slice(0, 8)
-      .map((assignment) => [`assignment:${assignment.id}`, `待完成｜${assignment.content}`])
-  ];
-  const uniqueOptions = options.filter(([value], index, all) =>
-    all.findIndex(([candidate]) => candidate === value) === index
-  );
-  elements.pomodoroTarget.innerHTML = uniqueOptions
-    .map(([value, label]) => `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`)
-    .join("");
-  elements.pomodoroTarget.value = pomodoroState.target;
-}
-
-function savePomodoroTarget() {
-  pomodoroState.target = elements.pomodoroTarget.value;
-  savePomodoroState();
-}
-
-function savePomodoroState() {
-  saveStorage(STORAGE_KEYS.pomodoro, pomodoroState);
-  void syncPomodoro();
 }
 
 /* ====================== 白天／黑夜模式 ====================== */
@@ -628,8 +407,7 @@ async function migrateLocalDataToCloud(userId) {
   await Promise.all([
     uploadLocalCollectionWhenCloudIsEmpty(userId, "assignments", assignments),
     uploadLocalCollectionWhenCloudIsEmpty(userId, "exams", exams),
-    uploadLocalScheduleWhenCloudIsEmpty(userId),
-    uploadLocalPomodoroWhenCloudIsEmpty(userId)
+    uploadLocalScheduleWhenCloudIsEmpty(userId)
   ]);
 }
 
@@ -638,14 +416,6 @@ async function uploadLocalScheduleWhenCloudIsEmpty(userId) {
   const snapshot = await getDoc(scheduleDocument);
   if (!snapshot.exists()) {
     await setDoc(scheduleDocument, { days: weeklySchedule, updatedAt: Date.now() });
-  }
-}
-
-async function uploadLocalPomodoroWhenCloudIsEmpty(userId) {
-  const pomodoroDocument = doc(database, "users", userId, "settings", "pomodoro");
-  const snapshot = await getDoc(pomodoroDocument);
-  if (!snapshot.exists()) {
-    await setDoc(pomodoroDocument, { ...pomodoroState, updatedAt: Date.now() });
   }
 }
 
@@ -710,20 +480,7 @@ function startCloudListeners(userId) {
         weeklySchedule = normalizeSchedule(snapshot.data().days);
         saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
         populateSubjectOptions();
-        populatePomodoroTargets();
         updateLiveCourseState();
-      },
-      handleCloudError
-    ),
-    onSnapshot(
-      doc(database, "users", userId, "settings", "pomodoro"),
-      (snapshot) => {
-        if (!snapshot.exists()) return;
-        pomodoroState = normalizePomodoroState(snapshot.data());
-        refreshPomodoroForToday();
-        updatePomodoroRemaining();
-        saveStorage(STORAGE_KEYS.pomodoro, pomodoroState);
-        renderPomodoro();
       },
       handleCloudError
     )
@@ -762,18 +519,6 @@ async function syncSchedule() {
     await setDoc(
       doc(database, "users", currentUser.uid, "settings", "schedule"),
       { days: weeklySchedule, updatedAt: Date.now() }
-    );
-  } catch (error) {
-    handleCloudError(error);
-  }
-}
-
-async function syncPomodoro() {
-  if (!currentUser) return;
-  try {
-    await setDoc(
-      doc(database, "users", currentUser.uid, "settings", "pomodoro"),
-      { ...pomodoroState, updatedAt: Date.now() }
     );
   } catch (error) {
     handleCloudError(error);
@@ -1339,7 +1084,6 @@ async function importSampleSchedule() {
   weeklySchedule = normalizeSchedule(defaultWeeklySchedule);
   saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
   populateSubjectOptions();
-  populatePomodoroTargets();
   updateLiveCourseState();
   showToast("已匯入範例課表");
   await syncSchedule();
@@ -1385,7 +1129,6 @@ async function saveCourse(event) {
 
   saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
   populateSubjectOptions();
-  populatePomodoroTargets();
   updateLiveCourseState();
   elements.courseModal.close();
   showToast("課表已更新");
@@ -1401,7 +1144,6 @@ async function deleteCourse() {
   weeklySchedule[day] = weeklySchedule[day].filter((item) => item.period !== period);
   saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
   populateSubjectOptions();
-  populatePomodoroTargets();
   updateLiveCourseState();
   elements.courseModal.close();
   showToast("課程已刪除");
@@ -1409,7 +1151,6 @@ async function deleteCourse() {
 }
 
 function renderAssignments() {
-  populatePomodoroTargets();
   const sorted = [...assignments].sort((a, b) => {
     if (a.completed !== b.completed) return Number(a.completed) - Number(b.completed);
     return parseDate(a.dueDate) - parseDate(b.dueDate);
@@ -1511,7 +1252,6 @@ async function saveAssignment(event) {
   }
 
   saveStorage(STORAGE_KEYS.assignments, assignments);
-  populatePomodoroTargets();
   renderAssignments();
   elements.assignmentModal.close();
   await syncCloudRecord("assignments", savedAssignment);

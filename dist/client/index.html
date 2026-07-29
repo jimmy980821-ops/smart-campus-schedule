@@ -26,7 +26,7 @@
         }
       })();
     </script>
-    <link rel="stylesheet" href="style.css?v=14" />
+    <link rel="stylesheet" href="style.css?v=13" />
   </head>
   <body>
     <a class="skip-link" href="#main-content">跳到主要內容</a>
@@ -39,7 +39,6 @@
         </a>
         <div class="nav-links" id="nav-links">
           <a href="#today">今日課程</a>
-          <a href="#pomodoro">番茄鐘</a>
           <a href="#schedule">每週課表</a>
           <a href="#assignments">作業管理</a>
           <a href="#exams">考試倒數</a>
@@ -124,56 +123,6 @@
             </div>
           </aside>
           <p class="support-message" id="notification-message" role="status"></p>
-        </div>
-      </section>
-
-      <section class="section pomodoro-section" id="pomodoro" aria-labelledby="pomodoro-title">
-        <div class="container">
-          <div class="section-heading">
-            <div>
-              <p class="section-kicker">FOCUS TIMER</p>
-              <h2 id="pomodoro-title">番茄鐘</h2>
-              <p>專注 25 分鐘、休息 5 分鐘，把今天的進度拆成容易開始的小段落。</p>
-            </div>
-            <span class="pomodoro-rounds" id="pomodoro-rounds" aria-live="polite">今日完成 0 輪</span>
-          </div>
-
-          <article class="pomodoro-card">
-            <div class="pomodoro-clock-column">
-              <div class="pomodoro-ring" id="pomodoro-ring" role="timer" aria-label="番茄鐘剩餘 25 分鐘">
-                <div class="pomodoro-ring-inner">
-                  <strong id="pomodoro-time">25:00</strong>
-                  <span id="pomodoro-ring-label">專注時間</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="pomodoro-controls">
-              <div class="pomodoro-mode-switch" role="group" aria-label="番茄鐘模式">
-                <button class="pomodoro-mode active" type="button" data-pomodoro-mode="focus" aria-pressed="true">
-                  專注 25 分
-                </button>
-                <button class="pomodoro-mode" type="button" data-pomodoro-mode="break" aria-pressed="false">
-                  休息 5 分
-                </button>
-              </div>
-
-              <label for="pomodoro-target">這一輪要完成</label>
-              <select id="pomodoro-target" aria-label="選擇本次專注目標">
-                <option value="">自由專注</option>
-              </select>
-
-              <p class="pomodoro-status" id="pomodoro-status" role="status" aria-live="polite">
-                準備好後，開始第一輪專注。
-              </p>
-
-              <div class="pomodoro-actions">
-                <button class="button button-primary" id="pomodoro-toggle" type="button">開始專注</button>
-                <button class="button button-secondary" id="pomodoro-reset" type="button">重設</button>
-              </div>
-              <p class="pomodoro-note">登入 Google 後會與手機、電腦同步；未登入時則保存在這台裝置。</p>
-            </div>
-          </article>
         </div>
       </section>
 
@@ -404,6 +353,6 @@
     </dialog>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script type="module" src="script.js?v=14"></script>
+    <script type="module" src="script.js?v=13"></script>
   </body>
 </html>
