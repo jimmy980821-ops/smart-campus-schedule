@@ -1,5 +1,7 @@
 const TAIPEI_TIME_ZONE = "Asia/Taipei";
 const FIXED_TIME_WINDOW_MINUTES = 10;
+const CLASS_REMINDER_WINDOW_MINUTES = 15;
+const ASSIGNMENT_REMINDER_WINDOW_MINUTES = 30;
 const EXAM_REMINDER_START_MINUTES = 8 * 60;
 const EXAM_REMINDER_END_MINUTES = 12 * 60;
 
@@ -35,7 +37,7 @@ export function getClassReminder(date, periodTimes, schedule) {
   const period = periodTimes.find((item) => {
     const [hour, minute] = item.start.split(":").map(Number);
     const minutesUntil = hour * 60 + minute - clock.currentMinutes;
-    return minutesUntil > 0 && minutesUntil <= 10;
+    return minutesUntil > 0 && minutesUntil <= CLASS_REMINDER_WINDOW_MINUTES;
   });
   if (!period) return null;
 
@@ -53,8 +55,16 @@ export function getClassReminder(date, periodTimes, schedule) {
 export function getAssignmentReminders(date, assignments, uid) {
   const clock = getTaipeiClock(date);
   const reminders = [];
-  const isMorningReminder = isWithinTimeWindow(clock.currentMinutes, 7 * 60);
-  const isEveningReminder = isWithinTimeWindow(clock.currentMinutes, 20 * 60);
+  const isMorningReminder = isWithinTimeWindow(
+    clock.currentMinutes,
+    7 * 60,
+    ASSIGNMENT_REMINDER_WINDOW_MINUTES
+  );
+  const isEveningReminder = isWithinTimeWindow(
+    clock.currentMinutes,
+    20 * 60,
+    ASSIGNMENT_REMINDER_WINDOW_MINUTES
+  );
   if (!isMorningReminder && !isEveningReminder) return reminders;
 
   for (const assignment of assignments) {
@@ -121,9 +131,13 @@ export function daysBetweenDateKeys(fromDateKey, toDateKey) {
   return Math.round((to - from) / 86400000);
 }
 
-function isWithinTimeWindow(currentMinutes, targetMinutes) {
+function isWithinTimeWindow(
+  currentMinutes,
+  targetMinutes,
+  windowMinutes = FIXED_TIME_WINDOW_MINUTES
+) {
   return currentMinutes >= targetMinutes
-    && currentMinutes < targetMinutes + FIXED_TIME_WINDOW_MINUTES;
+    && currentMinutes < targetMinutes + windowMinutes;
 }
 
 function isDateKey(value) {
