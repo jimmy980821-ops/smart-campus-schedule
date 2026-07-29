@@ -2,9 +2,26 @@ name: Send campus reminders
 
 on:
   schedule:
-    # 臺灣時間每天 07:00、08:00–14:59 與 20:00 時段，每五分鐘檢查一次。
-    # 課程只會在平日觸發；作業與學測提醒包含週末。
-    - cron: "*/5 23,0-6,12 * * *"
+    # 使用少量、錯開整點的臺灣時間排程，降低 GitHub 延遲或略過工作的機率。
+    # 作業到期日早上與前一晚各安排兩次備援。
+    - cron: "7,17 7 * * *"
+      timezone: "Asia/Taipei"
+    - cron: "7,17 20 * * *"
+      timezone: "Asia/Taipei"
+
+    # 學測每日倒數；相同通知 key 會避免重複推播。
+    - cron: "17,27 8 * * *"
+      timezone: "Asia/Taipei"
+
+    # 平日課程主要排程（約上課前 12 分鐘）與備援排程（約前 7 分鐘）。
+    - cron: "58 7-10,12 * * 1-5"
+      timezone: "Asia/Taipei"
+    - cron: "3 8-11,13 * * 1-5"
+      timezone: "Asia/Taipei"
+
+    # 第六節 14:20 上課，另外安排兩次提醒機會。
+    - cron: "8,13 14 * * 1-5"
+      timezone: "Asia/Taipei"
   workflow_dispatch:
     inputs:
       send_test:
