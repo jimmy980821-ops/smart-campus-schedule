@@ -1130,6 +1130,10 @@ html[data-theme="dark"] .analysis-icon {
   box-shadow: inset 4px 0 var(--primary);
 }
 
+.device-card.online-device:not(.current-device) {
+  border-color: rgba(36, 112, 78, 0.32);
+}
+
 .device-type {
   display: grid;
   width: 52px;
@@ -1149,6 +1153,7 @@ html[data-theme="dark"] .device-type {
 
 .device-card-heading {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 10px;
 }
@@ -1159,6 +1164,8 @@ html[data-theme="dark"] .device-type {
 
 .device-status {
   display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 3px 9px;
   border-radius: 99px;
   background: var(--soft);
@@ -1168,11 +1175,33 @@ html[data-theme="dark"] .device-type {
 }
 
 .device-status.is-current {
+  background: #eaf1ff;
+  color: var(--primary);
+}
+
+.device-status.is-online {
   background: #e4f3ec;
   color: #24704e;
 }
 
+.device-status.is-offline {
+  background: var(--soft);
+  color: var(--muted);
+}
+
+.device-status i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
 html[data-theme="dark"] .device-status.is-current {
+  background: #1c3153;
+  color: #8eb3f0;
+}
+
+html[data-theme="dark"] .device-status.is-online {
   background: #17382e;
   color: #80d8b1;
 }
