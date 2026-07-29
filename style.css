@@ -786,6 +786,16 @@ html[data-theme="dark"] .course-button small {
   box-shadow: 0 0 0 3px rgba(241, 170, 88, 0.15);
 }
 
+.course-button.empty-course {
+  border: 1px dashed var(--line);
+  background: transparent;
+  color: var(--muted);
+}
+
+.course-button.empty-course strong {
+  font-size: 1.15rem;
+}
+
 .empty-period {
   color: #b2bac7;
   font-size: 1.2rem;
@@ -1281,6 +1291,29 @@ html[data-theme="dark"] .site-footer {
   margin-top: 23px;
 }
 
+.course-slot {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--soft);
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.button-danger {
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  background: transparent;
+  color: var(--danger);
+}
+
+.button-danger:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+.form-action-spacer {
+  flex: 1;
+}
+
 .course-detail {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -1546,6 +1579,19 @@ html[data-theme="dark"] .site-footer {
 
   .modal {
     padding: 22px;
+  }
+
+  .course-form-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .course-form-actions .button-danger {
+    grid-column: 1 / -1;
+  }
+
+  .course-form-actions .form-action-spacer {
+    display: none;
   }
 
   .course-detail {

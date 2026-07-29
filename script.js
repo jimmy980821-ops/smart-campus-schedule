@@ -10,6 +10,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   getFirestore,
   onSnapshot,
@@ -55,7 +56,7 @@ const periodTimes = [
   { period: 6, start: "14:20", end: "15:10" }
 ];
 
-const weeklySchedule = {
+const defaultWeeklySchedule = {
   1: [
     { period: 1, subject: "導師時間", room: "305 教室", teacher: "趙晉鴻" },
     { period: 2, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
@@ -116,9 +117,11 @@ const subjectColors = {
 const STORAGE_KEYS = {
   assignments: "campusFlowAssignments",
   exams: "campusFlowExams",
+  schedule: "campusFlowWeeklySchedule",
   theme: "campusFlowTheme"
 };
 
+const COMPLETED_ASSIGNMENT_RETENTION_DAYS = 30;
 const weekdayNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
 const shortDateFormatter = new Intl.DateTimeFormat("zh-TW", { month: "long", day: "numeric", weekday: "long" });
 const fullDateFormatter = new Intl.DateTimeFormat("zh-TW", { year: "numeric", month: "long", day: "numeric" });
@@ -129,7 +132,8 @@ const deviceDateTimeFormatter = new Intl.DateTimeFormat("zh-TW", {
   minute: "2-digit"
 });
 
-let assignments = loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments());
+let weeklySchedule = normalizeSchedule(loadStorage(STORAGE_KEYS.schedule, defaultWeeklySchedule));
+let assignments = removeExpiredCompletedAssignments(loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments()));
 let exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
 let pushDevices = [];
 let notificationTimer = null;
@@ -139,6 +143,7 @@ let currentUser = null;
 let cloudUnsubscribers = [];
 let messaging = null;
 let serviceWorkerRegistration = null;
+let maintenanceTimer = null;
 
 const elements = {
   todayDate: document.querySelector("#today-date"),
@@ -178,6 +183,8 @@ const elements = {
   examModal: document.querySelector("#exam-modal"),
   examForm: document.querySelector("#exam-form"),
   courseModal: document.querySelector("#course-modal"),
+  courseForm: document.querySelector("#course-form"),
+  courseDeleteButton: document.querySelector("#delete-course-button"),
   toast: document.querySelector("#toast"),
   themeButton: document.querySelector("#theme-toggle"),
   themeIcon: document.querySelector("#theme-toggle-icon"),
@@ -191,6 +198,8 @@ document.addEventListener("DOMContentLoaded", init);
 
 function init() {
   initializeTheme();
+  saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+  saveStorage(STORAGE_KEYS.assignments, assignments);
   populateSubjectOptions();
   renderSchedule();
   renderAssignments();
@@ -202,12 +211,15 @@ function init() {
   initializePwa();
   initializeCloudSync();
   notificationTimer = window.setInterval(updateLiveCourseState, 30000);
+  maintenanceTimer = window.setInterval(cleanupCompletedAssignments, 60 * 60 * 1000);
 }
 
 function bindEvents() {
   document.querySelector("#add-assignment-button").addEventListener("click", () => openAssignmentModal());
   document.querySelector("#add-exam-button").addEventListener("click", () => openExamModal());
   elements.assignmentForm.addEventListener("submit", saveAssignment);
+  elements.courseForm.addEventListener("submit", saveCourse);
+  elements.courseDeleteButton.addEventListener("click", deleteCourse);
   elements.examForm.addEventListener("submit", saveExam);
   elements.notificationButton.addEventListener("click", enableBackgroundNotifications);
   elements.refreshDeviceButton.addEventListener("click", refreshCurrentDevice);
@@ -233,6 +245,7 @@ function bindEvents() {
 
   window.addEventListener("beforeunload", () => {
     if (notificationTimer) window.clearInterval(notificationTimer);
+    if (maintenanceTimer) window.clearInterval(maintenanceTimer);
     stopCloudListeners();
   });
 }
@@ -354,8 +367,17 @@ function setSyncStatus(message, isSynced = false) {
 async function migrateLocalDataToCloud(userId) {
   await Promise.all([
     uploadLocalCollectionWhenCloudIsEmpty(userId, "assignments", assignments),
-    uploadLocalCollectionWhenCloudIsEmpty(userId, "exams", exams)
+    uploadLocalCollectionWhenCloudIsEmpty(userId, "exams", exams),
+    uploadLocalScheduleWhenCloudIsEmpty(userId)
   ]);
+}
+
+async function uploadLocalScheduleWhenCloudIsEmpty(userId) {
+  const scheduleDocument = doc(database, "users", userId, "settings", "schedule");
+  const snapshot = await getDoc(scheduleDocument);
+  if (!snapshot.exists()) {
+    await setDoc(scheduleDocument, { days: weeklySchedule, updatedAt: Date.now() });
+  }
 }
 
 async function uploadLocalCollectionWhenCloudIsEmpty(userId, collectionName, items) {
@@ -386,9 +408,16 @@ function startCloudListeners(userId) {
 
   cloudUnsubscribers = [
     subscribe("assignments", (items) => {
-      assignments = items;
+      const expiredItems = items.filter(isExpiredCompletedAssignment);
+      const completedWithoutTimestamp = items.filter((item) => item.completed && !Number(item.completedAt));
+      assignments = removeExpiredCompletedAssignments(items);
       saveStorage(STORAGE_KEYS.assignments, assignments);
       renderAssignments();
+      expiredItems.forEach((item) => deleteCloudRecord("assignments", item.id));
+      completedWithoutTimestamp.forEach((item) => {
+        const normalizedItem = assignments.find((assignment) => assignment.id === item.id);
+        if (normalizedItem) syncCloudRecord("assignments", normalizedItem);
+      });
     }),
     subscribe("exams", (items) => {
       exams = items;
@@ -402,6 +431,17 @@ function startCloudListeners(userId) {
           .map((itemDocument) => ({ ...itemDocument.data(), id: itemDocument.id }))
           .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
         renderDeviceManagement();
+      },
+      handleCloudError
+    ),
+    onSnapshot(
+      doc(database, "users", userId, "settings", "schedule"),
+      (snapshot) => {
+        if (!snapshot.exists()) return;
+        weeklySchedule = normalizeSchedule(snapshot.data().days);
+        saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+        populateSubjectOptions();
+        updateLiveCourseState();
       },
       handleCloudError
     )
@@ -429,6 +469,18 @@ async function deleteCloudRecord(collectionName, id) {
   if (!currentUser) return;
   try {
     await deleteDoc(doc(database, "users", currentUser.uid, collectionName, id));
+  } catch (error) {
+    handleCloudError(error);
+  }
+}
+
+async function syncSchedule() {
+  if (!currentUser) return;
+  try {
+    await setDoc(
+      doc(database, "users", currentUser.uid, "settings", "schedule"),
+      { days: weeklySchedule, updatedAt: Date.now() }
+    );
   } catch (error) {
     handleCloudError(error);
   }
@@ -628,7 +680,7 @@ function renderDeviceManagement() {
     elements.deviceCount.textContent = "0 台";
     elements.deviceCountNote.textContent = "登入後即可查看";
     elements.deviceSyncState.textContent = "尚未登入";
-    elements.deviceSyncNote.textContent = "使用 Google 帳號同步作業與考試";
+    elements.deviceSyncNote.textContent = "使用 Google 帳號同步課表、作業與考試";
     elements.deviceList.innerHTML = '<div class="empty-state">請先登入 Google 帳號，即可查看同步與通知裝置。</div>';
     return;
   }
@@ -694,7 +746,7 @@ async function showForegroundPushMessage(payload) {
 }
 
 function isIosDevice() {
-  return /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return Boolean(getAppleDeviceType());
 }
 
 function isStandalonePwa() {
@@ -702,9 +754,20 @@ function isStandalonePwa() {
 }
 
 function getDeviceLabel() {
-  if (isIosDevice()) return "iPhone／iPad";
+  const appleDevice = getAppleDeviceType();
+  if (appleDevice) return appleDevice;
   if (/Android/i.test(navigator.userAgent)) return "Android";
   return "電腦瀏覽器";
+}
+
+function getAppleDeviceType() {
+  const userAgent = navigator.userAgent;
+  if (/iPad/i.test(userAgent)) return "iPad";
+  if (/iPhone|iPod/i.test(userAgent)) return "iPhone";
+
+  // iPadOS 13 之後可能使用桌面版 Mac User-Agent。
+  if (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1) return "iPad";
+  return "";
 }
 
 function getBrowserLabel() {
@@ -719,7 +782,8 @@ function getBrowserLabel() {
 }
 
 function getDeviceShortCode(platform) {
-  if (/iPhone|iPad/i.test(platform)) return "iOS";
+  if (/iPhone/i.test(platform)) return "IPH";
+  if (/iPad/i.test(platform)) return "IPD";
   if (/Android/i.test(platform)) return "AND";
   return "WEB";
 }
@@ -860,7 +924,17 @@ function renderSchedule(liveState = getLiveCourseState(new Date(), weeklySchedul
   elements.scheduleBody.innerHTML = periodTimes.map((time) => {
     const cells = [1, 2, 3, 4, 5].map((day) => {
       const course = weeklySchedule[day].find((item) => item.period === time.period);
-      if (!course) return `<td><span class="empty-period" aria-label="空堂">—</span></td>`;
+      if (!course) {
+        return `
+          <td>
+            <button class="course-button empty-course" type="button"
+              aria-label="新增${weekdayNames[day]}第 ${time.period} 節課程"
+              data-day="${day}" data-period="${time.period}">
+              <strong>＋</strong>
+              <small>新增課程</small>
+            </button>
+          </td>`;
+      }
 
       const isCurrent = day === currentDay && liveState.currentCourse?.period === time.period;
       const isNext = day === currentDay && liveState.nextCourse?.period === time.period;
@@ -895,17 +969,62 @@ function renderSchedule(liveState = getLiveCourseState(new Date(), weeklySchedul
 function openCourseModal(day, period) {
   const course = weeklySchedule[day].find((item) => item.period === period);
   const time = getPeriodTime(period);
-  if (!course) return;
 
-  document.querySelector("#course-modal-title").textContent = course.subject;
-  document.querySelector("#course-detail").innerHTML = `
-    <div class="detail-row"><span>上課日</span><strong>${weekdayNames[day]}</strong></div>
-    <div class="detail-row"><span>節次</span><strong>第 ${period} 節</strong></div>
-    <div class="detail-row"><span>時間</span><strong>${time.start}–${time.end}</strong></div>
-    <div class="detail-row"><span>教室</span><strong>${escapeHtml(course.room)}</strong></div>
-    <div class="detail-row"><span>任課老師</span><strong>${escapeHtml(course.teacher)}</strong></div>
-    <div class="detail-row"><span>課前提醒</span><strong>建議提早 5 分鐘到教室</strong></div>`;
+  elements.courseForm.reset();
+  document.querySelector("#course-day").value = String(day);
+  document.querySelector("#course-period").value = String(period);
+  document.querySelector("#course-modal-title").textContent = course ? "編輯課程" : "新增課程";
+  document.querySelector("#course-slot").textContent =
+    `${weekdayNames[day]}・第 ${period} 節・${time.start}–${time.end}`;
+  document.querySelector("#course-subject").value = course?.subject || "";
+  document.querySelector("#course-room").value = course?.room || "305 教室";
+  document.querySelector("#course-teacher").value = course?.teacher || "";
+  document.querySelector("#course-error").textContent = "";
+  elements.courseDeleteButton.hidden = !course;
   elements.courseModal.showModal();
+}
+
+async function saveCourse(event) {
+  event.preventDefault();
+  const day = Number(document.querySelector("#course-day").value);
+  const period = Number(document.querySelector("#course-period").value);
+  const subject = document.querySelector("#course-subject").value.trim();
+  const room = document.querySelector("#course-room").value.trim();
+  const teacher = document.querySelector("#course-teacher").value.trim();
+  const error = document.querySelector("#course-error");
+
+  if (!subject || !room || !teacher) {
+    error.textContent = "請完整填寫科目、教室與任課老師。";
+    return;
+  }
+
+  const course = { period, subject, room, teacher };
+  weeklySchedule[day] = [
+    ...weeklySchedule[day].filter((item) => item.period !== period),
+    course
+  ].sort((a, b) => a.period - b.period);
+
+  saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+  populateSubjectOptions();
+  updateLiveCourseState();
+  elements.courseModal.close();
+  showToast("課表已更新");
+  await syncSchedule();
+}
+
+async function deleteCourse() {
+  const day = Number(document.querySelector("#course-day").value);
+  const period = Number(document.querySelector("#course-period").value);
+  const course = weeklySchedule[day].find((item) => item.period === period);
+  if (!course || !window.confirm(`確定要刪除「${course.subject}」嗎？`)) return;
+
+  weeklySchedule[day] = weeklySchedule[day].filter((item) => item.period !== period);
+  saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+  populateSubjectOptions();
+  updateLiveCourseState();
+  elements.courseModal.close();
+  showToast("課程已刪除");
+  await syncSchedule();
 }
 
 function renderAssignments() {
@@ -996,7 +1115,15 @@ async function saveAssignment(event) {
     savedAssignment = assignments.find((item) => item.id === id);
     showToast("資料已更新");
   } else {
-    savedAssignment = { id: createId(), subject, content, dueDate, completed: false };
+    savedAssignment = {
+      id: createId(),
+      subject,
+      content,
+      dueDate,
+      completed: false,
+      completedAt: null,
+      createdAt: Date.now()
+    };
     assignments.push(savedAssignment);
     showToast("作業新增成功");
   }
@@ -1015,6 +1142,7 @@ async function handleAssignmentAction(action, id) {
     openAssignmentModal(item);
   } else if (action === "toggle") {
     item.completed = !item.completed;
+    item.completedAt = item.completed ? Date.now() : null;
     saveStorage(STORAGE_KEYS.assignments, assignments);
     renderAssignments();
     showToast(item.completed ? "作業已完成" : "已改為未完成");
@@ -1026,6 +1154,34 @@ async function handleAssignmentAction(action, id) {
     showToast("作業已刪除");
     await deleteCloudRecord("assignments", id);
   }
+}
+
+function removeExpiredCompletedAssignments(items) {
+  const completedAtFallback = Date.now();
+  return (Array.isArray(items) ? items : [])
+    .filter((item) => !isExpiredCompletedAssignment(item))
+    .map((item) => item.completed && !Number(item.completedAt)
+      ? { ...item, completedAt: completedAtFallback }
+      : item);
+}
+
+function isExpiredCompletedAssignment(item) {
+  if (!item?.completed) return false;
+  const completedAt = Number(item.completedAt);
+  if (!Number.isFinite(completedAt) || completedAt <= 0) return false;
+  return Date.now() - completedAt >= COMPLETED_ASSIGNMENT_RETENTION_DAYS * 86400000;
+}
+
+async function cleanupCompletedAssignments() {
+  const expiredItems = assignments.filter(isExpiredCompletedAssignment);
+  if (!expiredItems.length) return;
+
+  const expiredIds = new Set(expiredItems.map((item) => item.id));
+  assignments = assignments.filter((item) => !expiredIds.has(item.id));
+  saveStorage(STORAGE_KEYS.assignments, assignments);
+  renderAssignments();
+  await Promise.all(expiredItems.map((item) => deleteCloudRecord("assignments", item.id)));
+  showToast("已自動清除完成超過 30 天的作業");
 }
 
 function renderExams() {
@@ -1226,10 +1382,31 @@ function maybeSendClassNotification(liveState) {
 }
 
 function populateSubjectOptions() {
-  const subjects = [...new Set(Object.values(weeklySchedule).flat().map((course) => course.subject))];
+  const subjects = [...new Set([
+    ...Object.values(defaultWeeklySchedule).flat(),
+    ...Object.values(weeklySchedule).flat()
+  ].map((course) => course.subject))];
   document.querySelector("#assignment-subject").innerHTML = subjects
     .map((subject) => `<option value="${escapeHtml(subject)}">${escapeHtml(subject)}</option>`)
     .join("");
+}
+
+function normalizeSchedule(value) {
+  const source = value && typeof value === "object" ? value : defaultWeeklySchedule;
+  return Object.fromEntries([1, 2, 3, 4, 5].map((day) => {
+    const courses = Array.isArray(source[day]) ? source[day] : [];
+    const normalizedCourses = courses
+      .filter((course) => periodTimes.some((time) => time.period === Number(course?.period)))
+      .map((course) => ({
+        period: Number(course.period),
+        subject: String(course.subject || "").trim(),
+        room: String(course.room || "").trim(),
+        teacher: String(course.teacher || "").trim()
+      }))
+      .filter((course) => course.subject)
+      .sort((a, b) => a.period - b.period);
+    return [day, normalizedCourses];
+  }));
 }
 
 function setDefaultFormDates() {
