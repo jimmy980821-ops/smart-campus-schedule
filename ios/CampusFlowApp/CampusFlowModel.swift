@@ -6,6 +6,12 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
+struct NativeWebCredential: Equatable {
+    let uid: String
+    let idToken: String
+    let accessToken: String
+}
+
 @MainActor
 final class CampusFlowModel: ObservableObject {
     @Published private(set) var user: User?
@@ -13,6 +19,7 @@ final class CampusFlowModel: ObservableObject {
     @Published private(set) var assignments: [AssignmentItem] = []
     @Published private(set) var exams: [ExamItem] = []
     @Published private(set) var isLoading = false
+    @Published private(set) var webCredential: NativeWebCredential?
     @Published var errorMessage: String?
 
     private var authHandle: AuthStateDidChangeListenerHandle?
@@ -36,9 +43,11 @@ final class CampusFlowModel: ObservableObject {
                 self.user = user
                 self.stopListeners()
                 if let user {
+                    self.restoreGoogleSessionForWeb(uid: user.uid)
                     self.startListeners(uid: user.uid)
                     await PushNotificationManager.shared.refreshDeviceRegistration(uid: user.uid)
                 } else {
+                    self.webCredential = nil
                     self.clearData()
                 }
             }
@@ -75,7 +84,12 @@ final class CampusFlowModel: ObservableObject {
                 withIDToken: idToken,
                 accessToken: result.user.accessToken.tokenString
             )
-            _ = try await Auth.auth().signIn(with: credential)
+            let authResult = try await Auth.auth().signIn(with: credential)
+            webCredential = NativeWebCredential(
+                uid: authResult.user.uid,
+                idToken: idToken,
+                accessToken: result.user.accessToken.tokenString
+            )
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -96,22 +110,44 @@ final class CampusFlowModel: ObservableObject {
         return clientID
     }
 
+    private func restoreGoogleSessionForWeb(uid: String) {
+        guard webCredential == nil, GIDSignIn.sharedInstance.hasPreviousSignIn() else { return }
+
+        GIDSignIn.sharedInstance.restorePreviousSignIn { [weak self] user, _ in
+            guard let user,
+                  let idToken = user.idToken?.tokenString
+            else {
+                return
+            }
+            Task { @MainActor in
+                self?.webCredential = NativeWebCredential(
+                    uid: uid,
+                    idToken: idToken,
+                    accessToken: user.accessToken.tokenString
+                )
+            }
+        }
+    }
+
     func signOut() {
         PushNotificationManager.shared.markOffline()
+        webCredential = nil
         try? Auth.auth().signOut()
         GIDSignIn.sharedInstance.signOut()
     }
 
-    func requestNotifications() async {
+    func requestNotifications() async -> Bool {
         guard let uid = user?.uid else {
             errorMessage = "請先登入 Google 帳號。"
-            return
+            return false
         }
         do {
             try await PushNotificationManager.shared.requestPermission(uid: uid)
             errorMessage = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 

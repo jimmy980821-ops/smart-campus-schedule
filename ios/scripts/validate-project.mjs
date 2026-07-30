@@ -9,6 +9,7 @@ const required = [
   "CampusFlowApp/CampusFlowModel.swift",
   "CampusFlowApp/PushNotificationManager.swift",
   "CampusFlowApp/ContentView.swift",
+  "CampusFlowApp/CampusFlowWebView.swift",
   "CampusFlowWidget/CampusFlowWidget.swift",
   "Shared/CampusFlowModels.swift",
   "Shared/WidgetStore.swift",
