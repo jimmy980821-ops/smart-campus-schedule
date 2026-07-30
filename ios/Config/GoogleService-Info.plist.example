@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NOTICE</key>
+	<string>請從 Firebase 控制台下載真正的 GoogleService-Info.plist，取代本範例檔。</string>
+</dict>
+</plist>
+

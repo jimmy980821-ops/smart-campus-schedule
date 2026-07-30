@@ -176,7 +176,15 @@ async function listPushDevices(token) {
     for (const document of data.documents || []) {
       const pushToken = document.fields?.token?.stringValue;
       const uid = document.fields?.uid?.stringValue;
-      if (pushToken) devices.push({ id: document.name.split("/").pop(), token: pushToken, uid });
+      if (pushToken) {
+        devices.push({
+          id: document.name.split("/").pop(),
+          token: pushToken,
+          uid,
+          browser: document.fields?.browser?.stringValue || "",
+          installMode: document.fields?.installMode?.stringValue || ""
+        });
+      }
     }
     pageToken = data.nextPageToken || "";
   } while (pageToken);
@@ -226,33 +234,53 @@ function decodeFirestoreValue(value) {
 }
 
 async function sendMessage(deviceToken, reminder, token) {
+  const isNativeIos = deviceToken.browser === "原生 App"
+    || deviceToken.installMode === "iOS App";
+  const message = {
+    token: deviceToken.token,
+    data: {
+      title: reminder.title,
+      body: reminder.body,
+      icon: ICON_URL,
+      url: SITE_URL,
+      tag: reminder.tag
+    }
+  };
+
+  if (isNativeIos) {
+    // 原生 iOS 必須帶 notification/APNs payload，App 關閉時才會由系統顯示通知。
+    message.notification = {
+      title: reminder.title,
+      body: reminder.body
+    };
+    message.apns = {
+      headers: { "apns-priority": "10" },
+      payload: {
+        aps: {
+          sound: "default"
+        }
+      }
+    };
+  } else {
+    // Web Push 保持 data-only，交給既有 Service Worker 顯示，避免同一則通知重複。
+    message.webpush = { headers: { Urgency: "high" } };
+  }
+
   const response = await fetch(`https://fcm.googleapis.com/v1/projects/${PROJECT_ID}/messages:send`, {
     method: "POST",
     headers: {
       authorization: `Bearer ${token}`,
       "content-type": "application/json"
     },
-    body: JSON.stringify({
-      message: {
-        token: deviceToken,
-        data: {
-          title: reminder.title,
-          body: reminder.body,
-          icon: ICON_URL,
-          url: SITE_URL,
-          tag: reminder.tag
-        },
-        webpush: { headers: { Urgency: "high" } }
-      }
-    })
+    body: JSON.stringify({ message })
   });
 
   if (response.ok) return { ok: true, invalidToken: false };
-  const message = await response.text();
-  console.error(`FCM 發送失敗 ${response.status}: ${message}`);
+  const responseMessage = await response.text();
+  console.error(`FCM 發送失敗 ${response.status}: ${responseMessage}`);
   return {
     ok: false,
-    invalidToken: response.status === 404 || message.includes("UNREGISTERED")
+    invalidToken: response.status === 404 || responseMessage.includes("UNREGISTERED")
   };
 }
 
