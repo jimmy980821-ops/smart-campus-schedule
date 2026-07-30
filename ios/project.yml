@@ -4,7 +4,8 @@ options:
   bundleIdPrefix: com.jimmy980821
   deploymentTarget:
     iOS: "17.0"
-  xcodeVersion: "16.0"
+  xcodeVersion: "15.2"
+  projectFormat: xcode15_0
 
 configs:
   Debug: debug
@@ -12,7 +13,7 @@ configs:
 
 settings:
   base:
-    SWIFT_VERSION: "5.10"
+    SWIFT_VERSION: "5.9"
     DEVELOPMENT_TEAM: ""
     APP_GROUP_ID: group.com.jimmy980821.campusflow
     GOOGLE_REVERSED_CLIENT_ID: REPLACE_WITH_REVERSED_CLIENT_ID
@@ -21,10 +22,10 @@ settings:
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk.git
-    from: 11.0.0
+    exactVersion: 10.29.0
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS.git
-    from: 8.0.0
+    exactVersion: 7.1.0
 
 targets:
   CampusFlow:
