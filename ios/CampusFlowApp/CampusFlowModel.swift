@@ -50,6 +50,10 @@ final class CampusFlowModel: ObservableObject {
             errorMessage = "請先加入 Firebase 的 GoogleService-Info.plist。"
             return
         }
+        guard let clientID = Self.googleClientID else {
+            errorMessage = "Firebase 設定檔缺少 Google Client ID，請在 Firebase 重新下載 GoogleService-Info.plist。"
+            return
+        }
         guard let root = UIApplication.shared.connectedScenes
             .compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController })
             .first
@@ -61,6 +65,8 @@ final class CampusFlowModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
+            // 每次登入前設定一次，避免 App 啟動順序造成 Google Sign-In 尚未初始化。
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
             let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: root)
             guard let idToken = result.user.idToken?.tokenString else {
                 throw CampusFlowError.missingGoogleToken
@@ -74,6 +80,20 @@ final class CampusFlowModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private static var googleClientID: String? {
+        if let clientID = FirebaseApp.app()?.options.clientID, !clientID.isEmpty {
+            return clientID
+        }
+        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+              let serviceInfo = NSDictionary(contentsOfFile: path),
+              let clientID = serviceInfo["CLIENT_ID"] as? String,
+              !clientID.isEmpty
+        else {
+            return nil
+        }
+        return clientID
     }
 
     func signOut() {
@@ -264,4 +284,3 @@ enum CampusFlowError: LocalizedError {
         }
     }
 }
-

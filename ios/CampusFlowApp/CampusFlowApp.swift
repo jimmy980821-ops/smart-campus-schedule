@@ -30,7 +30,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let options = FirebaseOptions(contentsOfFile: path) {
             FirebaseApp.configure(options: options)
-            if let clientID = options.clientID {
+            let serviceInfo = NSDictionary(contentsOfFile: path)
+            if let clientID = options.clientID ?? (serviceInfo?["CLIENT_ID"] as? String) {
                 GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
             }
         }
