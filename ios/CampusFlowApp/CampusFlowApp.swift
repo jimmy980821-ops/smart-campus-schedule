@@ -8,6 +8,7 @@ import UserNotifications
 @main
 struct CampusFlowApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var model = CampusFlowModel()
 
     var body: some Scene {
@@ -17,6 +18,12 @@ struct CampusFlowApp: App {
                 .task { await model.start() }
                 .onOpenURL { url in
                     _ = GIDSignIn.sharedInstance.handle(url)
+                }
+                .onChange(of: scenePhase) { _, phase in
+                    guard phase != .inactive else { return }
+                    Task {
+                        await model.updateDevicePresence(isOnline: phase == .active)
+                    }
                 }
         }
     }

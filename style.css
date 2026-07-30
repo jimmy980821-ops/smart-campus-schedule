@@ -1200,6 +1200,16 @@ html[data-theme="dark"] .device-type {
   color: var(--muted);
 }
 
+.device-status.has-notifications {
+  background: #eaf1ff;
+  color: var(--primary);
+}
+
+.device-status.sync-only {
+  background: #fff4dc;
+  color: #8a5b00;
+}
+
 .device-status i {
   width: 7px;
   height: 7px;
@@ -1215,6 +1225,16 @@ html[data-theme="dark"] .device-status.is-current {
 html[data-theme="dark"] .device-status.is-online {
   background: #17382e;
   color: #80d8b1;
+}
+
+html[data-theme="dark"] .device-status.has-notifications {
+  background: #1c3153;
+  color: #8eb3f0;
+}
+
+html[data-theme="dark"] .device-status.sync-only {
+  background: #4a3514;
+  color: #ffd78a;
 }
 
 .device-card small {

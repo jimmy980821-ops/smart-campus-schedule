@@ -10,7 +10,7 @@ Google 身分、登出與通知權限會透過安全的原生橋接交給 iOS Ap
 - Firebase Google 登入
 - Firestore 課表、作業、考試即時同步
 - Firebase Cloud Messaging 原生裝置註冊
-- iPhone／iPad 裝置名稱辨識
+- iPhone／iPad 裝置名稱、App 版本、在線狀態辨識
 - App Groups 共用 Widget 資料
 - iPhone 主畫面小型、中型 Widget
 - iPhone 鎖定畫面行內、圓形、長方形 Widget
@@ -55,7 +55,8 @@ Google 身分、登出與通知權限會透過安全的原生橋接交給 iOS Ap
 
 未加入 Apple Developer Program 時，可使用 Xcode 的 Personal Team 安裝到自己的
 iPhone。免費簽署不支援 APNs 與 App Groups，因此這個模式會保留 App、Google
-登入及網站資料同步，但停用原生背景推播與 Widget 共用資料。
+登入、網站資料同步與原生 App 裝置登記，但停用原生背景推播與 Widget 共用資料。
+Widget 會改用 `Shared/CampusFlowModels.swift` 內建的固定課表與學測日期。
 
 先在 Xcode 登入 Apple ID 並選過 Personal Team，再執行：
 
@@ -81,7 +82,8 @@ bash scripts/configure-firebase.sh
 - 課表：`users/{uid}/settings/schedule`
 - 作業：`users/{uid}/assignments/{assignmentId}`
 - 考試：`users/{uid}/exams/{examId}`
-- 推播裝置：`pushDevices/{sha256(fcmToken)}`
+- 網站推播裝置：`pushDevices/{sha256(fcmToken)}`
+- 原生 App 裝置：`pushDevices/native-{sha256(uid + installId)}`
 
 App 會將小工具需要的精簡資料寫入：
 
