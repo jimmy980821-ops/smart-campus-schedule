@@ -27,15 +27,16 @@
 3. 到 Firebase 控制台的 `campus-flow-9965c` 專案新增 iOS App。
 4. Bundle ID 填入 `com.jimmy980821.campusflow`。
 5. 下載 `GoogleService-Info.plist`，放到 `ios/Config/GoogleService-Info.plist`。
-6. 開啟該 plist，複製 `REVERSED_CLIENT_ID`，取代 `ios/project.yml` 中的：
+6. 執行自動設定腳本，讀取 `REVERSED_CLIENT_ID` 並重新產生專案：
 
-   ```yaml
-   GOOGLE_REVERSED_CLIENT_ID: REPLACE_WITH_REVERSED_CLIENT_ID
+   ```bash
+   cd ios
+   bash scripts/configure-firebase.sh
    ```
 
 7. 在 Firebase Authentication 確認 Google 登入已啟用。
 8. 在 Firebase 專案設定的 Cloud Messaging 上傳 APNs Authentication Key。
-9. 進入本資料夾並產生 Xcode 專案：
+9. 若之後有修改 `project.yml`，可再次產生 Xcode 專案：
 
    ```bash
    cd ios
