@@ -1,10 +1,12 @@
 # Campus Flow iOS 與 Widget
 
-這個資料夾是現有 Campus Flow 網站的原生 iPhone／iPad 伴隨 App。它沿用同一個 Firebase 專案與資料格式，不會取代網站。
+這個資料夾是現有 Campus Flow 網站的原生 iPhone／iPad App。它沿用同一個 Firebase 專案與資料格式，登入後會直接呈現完整網站介面。
+
+Google 身分、登出與通知權限會透過安全的原生橋接交給 iOS App 處理；Widget 與背景推播仍由原生 Firebase SDK 負責。
 
 ## 已包含
 
-- SwiftUI 原生首頁
+- SwiftUI 原生登入與完整網站混合式首頁
 - Firebase Google 登入
 - Firestore 課表、作業、考試即時同步
 - Firebase Cloud Messaging 原生裝置註冊
