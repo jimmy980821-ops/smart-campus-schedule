@@ -42,7 +42,10 @@ struct CampusFlowWebView: UIViewRepresentable {
         context.coordinator.model = model
         context.coordinator.credential = credential
         guard let credential else { return }
-        webView.evaluateJavaScript(Self.signInScript(credential: credential))
+        webView.evaluateJavaScript(
+            Self.signInScript(credential: credential),
+            completionHandler: nil
+        )
     }
 
     static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
@@ -178,7 +181,8 @@ struct CampusFlowWebView: UIViewRepresentable {
                                   "設定完成；關閉 App 後仍可收到課程、作業與學測倒數通知。";
                               }
                             })();
-                            """
+                            """,
+                            completionHandler: nil
                         )
                     }
                 case "sign-out":
@@ -193,7 +197,10 @@ struct CampusFlowWebView: UIViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard let credential else { return }
-            webView.evaluateJavaScript(CampusFlowWebView.signInScript(credential: credential))
+            webView.evaluateJavaScript(
+                CampusFlowWebView.signInScript(credential: credential),
+                completionHandler: nil
+            )
         }
 
         func webView(
