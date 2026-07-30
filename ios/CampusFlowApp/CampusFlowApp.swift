@@ -30,6 +30,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
            let options = FirebaseOptions(contentsOfFile: path) {
             FirebaseApp.configure(options: options)
+            if let clientID = options.clientID {
+                GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+            }
         }
 
         UNUserNotificationCenter.current().delegate = PushNotificationManager.shared
