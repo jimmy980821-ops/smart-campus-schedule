@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PLIST_PATH="$IOS_DIR/Config/GoogleService-Info.plist"
 PROJECT_SPEC="$IOS_DIR/project.yml"
+PBXPROJ_PATH="$IOS_DIR/CampusFlow.xcodeproj/project.pbxproj"
 EXPECTED_BUNDLE_ID="com.jimmy980821.campusflow"
 
 if [[ ! -f "$PLIST_PATH" ]]; then
@@ -30,6 +31,20 @@ if grep -q "REPLACE_WITH_REVERSED_CLIENT_ID" "$PROJECT_SPEC"; then
 elif ! grep -q "$REVERSED_CLIENT_ID" "$PROJECT_SPEC"; then
   echo "project.yml 已有不同的 Google URL Scheme，請先檢查設定。"
   exit 1
+fi
+
+# 重新產生專案前，保留使用者已在 Xcode 選擇的 Apple Team。
+if [[ -f "$PBXPROJ_PATH" ]] && grep -q 'DEVELOPMENT_TEAM: ""' "$PROJECT_SPEC"; then
+  CURRENT_TEAM=$(
+    /usr/bin/sed -n \
+      's/^[[:space:]]*DEVELOPMENT_TEAM = \([^;]*\);/\1/p' \
+      "$PBXPROJ_PATH" | /usr/bin/head -n 1
+  )
+  if [[ -n "$CURRENT_TEAM" ]]; then
+    /usr/bin/sed -i '' \
+      "s|DEVELOPMENT_TEAM: \"\"|DEVELOPMENT_TEAM: \"$CURRENT_TEAM\"|" \
+      "$PROJECT_SPEC"
+  fi
 fi
 
 if command -v xcodegen >/dev/null 2>&1; then
