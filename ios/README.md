@@ -16,7 +16,8 @@
 
 ## 在 Mac 上第一次建立
 
-1. 安裝最新版 Xcode。
+1. 建議安裝最新版 Xcode。若使用 2017 MacBook Pro／macOS Ventura，
+   專案也已鎖定相容的 Xcode 15.2、Firebase 10.29.0 與 Google Sign-In 7.1.0。
 2. 安裝 XcodeGen：
 
    ```bash
