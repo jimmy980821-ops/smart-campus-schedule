@@ -619,6 +619,9 @@ async function registerPushDevice() {
     platform: getDeviceLabel(),
     browser: getBrowserLabel(),
     installMode: isStandalonePwa() ? "主畫面 App" : "瀏覽器",
+    nativeApp: false,
+    syncEnabled: true,
+    notificationsEnabled: true,
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Taipei",
     updatedAt: now,
     lastSeenAt: now,
@@ -637,6 +640,7 @@ async function registerPushDevice() {
 }
 
 async function updateDevicePresence(isOnline = document.visibilityState === "visible") {
+  if (window.__CAMPUS_FLOW_NATIVE_APP__) return;
   const deviceId = getCurrentDeviceId();
   if (!deviceId || !currentUser || !navigator.onLine) return;
 
@@ -646,6 +650,9 @@ async function updateDevicePresence(isOnline = document.visibilityState === "vis
       platform: getDeviceLabel(),
       browser: getBrowserLabel(),
       installMode: isStandalonePwa() ? "主畫面 App" : "瀏覽器",
+      nativeApp: false,
+      syncEnabled: true,
+      notificationsEnabled: true,
       lastSeenAt: Date.now(),
       online: Boolean(isOnline)
     }, { merge: true });
@@ -682,6 +689,11 @@ async function removeCurrentPushDevice() {
 async function refreshCurrentDevice() {
   if (!currentUser) {
     showToast("請先登入 Google 帳號");
+    return;
+  }
+
+  if (window.__CAMPUS_FLOW_NATIVE_APP__) {
+    showToast("原生 App 會自動更新裝置狀態");
     return;
   }
 
@@ -748,15 +760,16 @@ function renderDeviceManagement() {
 
   const currentDeviceId = getCurrentDeviceId();
   const onlineDeviceCount = pushDevices.filter(isDeviceOnline).length;
+  const notificationDeviceCount = pushDevices.filter(hasBackgroundNotifications).length;
   elements.deviceCount.textContent = `${pushDevices.length} 台`;
   elements.deviceCountNote.textContent = pushDevices.length
-    ? `${onlineDeviceCount} 台在線・皆已啟用背景通知`
-    : "目前沒有啟用背景通知的裝置";
+    ? `${onlineDeviceCount} 台在線・${notificationDeviceCount} 台啟用背景通知`
+    : "目前沒有已登記的裝置";
   elements.deviceSyncState.textContent = "即時同步中";
   elements.deviceSyncNote.textContent = currentUser.email || currentUser.displayName || "Google 帳號";
 
   if (!pushDevices.length) {
-    elements.deviceList.innerHTML = '<div class="empty-state">尚未啟用通知裝置。請按「更新這台裝置」完成設定。</div>';
+    elements.deviceList.innerHTML = '<div class="empty-state">尚未登記任何裝置。網站可按「更新這台裝置」；原生 App 登入後會自動加入。</div>';
     return;
   }
 
@@ -765,21 +778,28 @@ function renderDeviceManagement() {
     const platform = device.platform || "未知裝置";
     const browser = device.browser || "瀏覽器";
     const installMode = device.installMode || "網頁";
+    const appVersion = device.appVersion
+      ? ` · 版本 ${device.appVersion}${device.buildNumber ? ` (${device.buildNumber})` : ""}`
+      : "";
+    const notificationsEnabled = hasBackgroundNotifications(device);
     const isOnline = isDeviceOnline(device);
     const lastSeenAt = device.lastSeenAt || device.updatedAt;
 
     return `
       <article class="device-card${isCurrentDevice ? " current-device" : ""}${isOnline ? " online-device" : ""}">
-        <span class="device-type" aria-hidden="true">${escapeHtml(getDeviceShortCode(platform))}</span>
+        <span class="device-type" aria-hidden="true">${escapeHtml(getDeviceShortCode(platform, installMode))}</span>
         <div class="device-card-body">
           <div class="device-card-heading">
             <h3>${escapeHtml(platform)}</h3>
             <span class="device-status ${isOnline ? "is-online" : "is-offline"}">
               <i aria-hidden="true"></i>${isOnline ? "在線中" : "離線"}
             </span>
+            <span class="device-status ${notificationsEnabled ? "has-notifications" : "sync-only"}">
+              ${notificationsEnabled ? "背景通知" : "同步／小工具"}
+            </span>
             ${isCurrentDevice ? '<span class="device-status is-current">這台裝置</span>' : ""}
           </div>
-          <p>${escapeHtml(browser)} · ${escapeHtml(installMode)}</p>
+          <p>${escapeHtml(browser)} · ${escapeHtml(installMode)}${escapeHtml(appVersion)}</p>
           <small>${isOnline ? "目前使用中" : `最後連線：${escapeHtml(formatDeviceUpdatedAt(lastSeenAt))}`}</small>
         </div>
         <button
@@ -800,6 +820,11 @@ function isDeviceOnline(device) {
   return device?.online !== false
     && Number.isFinite(lastSeenAt)
     && Date.now() - lastSeenAt <= DEVICE_ONLINE_WINDOW_MS;
+}
+
+function hasBackgroundNotifications(device) {
+  if (device?.notificationsEnabled === false) return false;
+  return Boolean(device?.token);
 }
 
 async function showForegroundPushMessage(payload) {
@@ -854,7 +879,8 @@ function getBrowserLabel() {
   return "瀏覽器";
 }
 
-function getDeviceShortCode(platform) {
+function getDeviceShortCode(platform, installMode = "") {
+  if (/原生 App/i.test(installMode)) return "APP";
   if (/iPhone/i.test(platform)) return "IPH";
   if (/iPad/i.test(platform)) return "IPD";
   if (/Android/i.test(platform)) return "AND";
@@ -868,6 +894,9 @@ function formatDeviceUpdatedAt(value) {
 }
 
 function getCurrentDeviceId() {
+  if (window.__CAMPUS_FLOW_NATIVE_APP__ && window.__CAMPUS_FLOW_NATIVE_DEVICE_ID__) {
+    return window.__CAMPUS_FLOW_NATIVE_DEVICE_ID__;
+  }
   try {
     return localStorage.getItem("campusFlowPushDeviceId") || "";
   } catch {

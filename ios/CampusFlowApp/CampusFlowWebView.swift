@@ -65,7 +65,8 @@ struct CampusFlowWebView: UIViewRepresentable {
         let value: [String: String] = [
             "uid": credential.uid,
             "idToken": credential.idToken,
-            "accessToken": credential.accessToken
+            "accessToken": credential.accessToken,
+            "deviceID": credential.deviceID
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: value),
               let json = String(data: data, encoding: .utf8)
@@ -80,6 +81,8 @@ struct CampusFlowWebView: UIViewRepresentable {
         return """
         window.__CAMPUS_FLOW_NATIVE_APP__ = true;
         window.__CAMPUS_FLOW_NATIVE_AUTH__ = \(payload);
+        window.__CAMPUS_FLOW_NATIVE_DEVICE_ID__ =
+          window.__CAMPUS_FLOW_NATIVE_AUTH__?.deviceID || "";
 
         window.campusFlowNativeSignIn = async function(payload, attempt = 0) {
           if (!payload || !payload.idToken) return;
@@ -142,6 +145,8 @@ struct CampusFlowWebView: UIViewRepresentable {
         let payload = credentialJSON(credential)
         return """
         window.__CAMPUS_FLOW_NATIVE_AUTH__ = \(payload);
+        window.__CAMPUS_FLOW_NATIVE_DEVICE_ID__ =
+          window.__CAMPUS_FLOW_NATIVE_AUTH__?.deviceID || "";
         window.campusFlowNativeSignIn?.(window.__CAMPUS_FLOW_NATIVE_AUTH__);
         """
     }

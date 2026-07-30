@@ -18,6 +18,8 @@ settings:
     APP_GROUP_ID: group.com.jimmy980821.campusflow
     GOOGLE_REVERSED_CLIENT_ID: REPLACE_WITH_REVERSED_CLIENT_ID
     CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: 1.0.0
+    CURRENT_PROJECT_VERSION: 1
 
 packages:
   Firebase:
@@ -55,6 +57,7 @@ targets:
           - remote-notification
         WEBSITE_URL: https://jimmy980821-ops.github.io/smart-campus-schedule/
         APP_GROUP_ID: $(APP_GROUP_ID)
+        NATIVE_PUSH_ENABLED: true
     entitlements:
       path: Config/CampusFlow.entitlements
       properties:

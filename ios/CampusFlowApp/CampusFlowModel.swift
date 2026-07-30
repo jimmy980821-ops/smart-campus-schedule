@@ -10,6 +10,7 @@ struct NativeWebCredential: Equatable {
     let uid: String
     let idToken: String
     let accessToken: String
+    let deviceID: String
 }
 
 @MainActor
@@ -88,7 +89,8 @@ final class CampusFlowModel: ObservableObject {
             webCredential = NativeWebCredential(
                 uid: authResult.user.uid,
                 idToken: idToken,
-                accessToken: result.user.accessToken.tokenString
+                accessToken: result.user.accessToken.tokenString,
+                deviceID: PushNotificationManager.shared.nativeDeviceID(uid: authResult.user.uid)
             )
             errorMessage = nil
         } catch {
@@ -123,7 +125,8 @@ final class CampusFlowModel: ObservableObject {
                 self?.webCredential = NativeWebCredential(
                     uid: uid,
                     idToken: idToken,
-                    accessToken: user.accessToken.tokenString
+                    accessToken: user.accessToken.tokenString,
+                    deviceID: PushNotificationManager.shared.nativeDeviceID(uid: uid)
                 )
             }
         }
@@ -149,6 +152,11 @@ final class CampusFlowModel: ObservableObject {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    func updateDevicePresence(isOnline: Bool) async {
+        guard let uid = user?.uid else { return }
+        await PushNotificationManager.shared.updatePresence(uid: uid, online: isOnline)
     }
 
     private func startListeners(uid: String) {

@@ -47,6 +47,7 @@ REVERSED_CLIENT_ID=$(/usr/libexec/PlistBuddy -c "Print :REVERSED_CLIENT_ID" "$PL
 ' "$PROJECT_SPEC" |
   /usr/bin/sed \
     -e 's|CODE_SIGN_ENTITLEMENTS: Config/CampusFlow.entitlements|CODE_SIGN_ENTITLEMENTS: ""|g' \
+    -e 's|NATIVE_PUSH_ENABLED: true|NATIVE_PUSH_ENABLED: false|g' \
     -e "s|REPLACE_WITH_REVERSED_CLIENT_ID|$REVERSED_CLIENT_ID|g" \
     > "$PERSONAL_SPEC"
 
