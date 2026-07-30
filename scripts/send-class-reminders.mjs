@@ -2,7 +2,8 @@ import { createSign } from "node:crypto";
 import {
   getAssignmentReminders,
   getClassReminder,
-  getExamReminders
+  getExamReminders,
+  getTaipeiClock
 } from "./reminder-logic.mjs";
 
 const PROJECT_ID = "campus-flow-9965c";
@@ -33,6 +34,11 @@ const reminderTime = process.env.NOW ? new Date(process.env.NOW) : new Date();
 const serviceAccount = parseServiceAccount();
 const accessToken = await createAccessToken(serviceAccount);
 const devices = await listPushDevices(accessToken);
+const taipeiClock = getTaipeiClock(reminderTime);
+console.log(
+  `提醒巡檢：臺灣 ${taipeiClock.dateKey} ${taipeiClock.hour}:${taipeiClock.minute}，`
+  + `已訂閱裝置 ${devices.length} 台。`
+);
 if (!devices.length) {
   console.log("目前沒有已訂閱背景通知的裝置。");
   process.exit(0);
@@ -64,6 +70,7 @@ for (const group of reminderGroups) {
     continue;
   }
 
+  console.log(`準備發送：${reminder.title}，目標 ${targetDevices.length} 台。`);
   let reminderSuccessCount = 0;
   targetCount += targetDevices.length;
   for (const device of targetDevices) {

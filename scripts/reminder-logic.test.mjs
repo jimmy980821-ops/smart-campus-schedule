@@ -121,6 +121,16 @@ test("平日上課前 10 分鐘仍會提醒", () => {
   assert.equal(reminder?.title, "準備上課：導師時間");
 });
 
+test("課程備援巡檢在上課前 5 分鐘仍會提醒", () => {
+  const reminder = getClassReminder(
+    new Date("2026-07-27T00:05:00Z"),
+    [{ period: 1, start: "08:10" }],
+    { 1: ["導師時間"] }
+  );
+
+  assert.equal(reminder?.key, "2026-07-27-period-1");
+});
+
 test("課程主要排程在上課前 12 分鐘也會提醒", () => {
   const reminder = getClassReminder(
     new Date("2026-07-26T23:58:00Z"),
@@ -157,4 +167,20 @@ test("作業備援排程延遲到 17 分仍會提醒", () => {
 
   assert.equal(morningReminders.length, 1);
   assert.equal(eveningReminders.length, 1);
+});
+
+test("作業第三次巡檢在 27 分仍會提醒", () => {
+  const reminders = getAssignmentReminders(
+    new Date("2026-07-27T23:27:00Z"),
+    [{
+      id: "a1",
+      subject: "英文",
+      content: "完成習作",
+      dueDate: "2026-07-28",
+      completed: false
+    }],
+    "user-1"
+  );
+
+  assert.equal(reminders.length, 1);
 });
