@@ -1,0 +1,105 @@
+name: CampusFlow
+
+options:
+  bundleIdPrefix: com.jimmy980821
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+
+configs:
+  Debug: debug
+  Release: release
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    DEVELOPMENT_TEAM: ""
+    APP_GROUP_ID: group.com.jimmy980821.campusflow
+    GOOGLE_REVERSED_CLIENT_ID: REPLACE_WITH_REVERSED_CLIENT_ID
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  Firebase:
+    url: https://github.com/firebase/firebase-ios-sdk.git
+    from: 11.0.0
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS.git
+    from: 8.0.0
+
+targets:
+  CampusFlow:
+    type: application
+    platform: iOS
+    sources:
+      - path: CampusFlowApp
+      - path: Shared
+      - path: Config
+        includes:
+          - GoogleService-Info.plist
+        optional: true
+        buildPhase: resources
+    info:
+      path: Config/CampusFlow-Info.plist
+      properties:
+        CFBundleDisplayName: 校園日程
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLSchemes:
+              - $(GOOGLE_REVERSED_CLIENT_ID)
+        NSUserNotificationUsageDescription: 用來傳送上課、作業與考試提醒。
+        UIBackgroundModes:
+          - remote-notification
+        WEBSITE_URL: https://jimmy980821-ops.github.io/smart-campus-schedule/
+        APP_GROUP_ID: $(APP_GROUP_ID)
+    entitlements:
+      path: Config/CampusFlow.entitlements
+      properties:
+        aps-environment: development
+        com.apple.security.application-groups:
+          - $(APP_GROUP_ID)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jimmy980821.campusflow
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: Config/CampusFlow.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: Config/CampusFlow.entitlements
+    dependencies:
+      - package: Firebase
+        product: FirebaseAuth
+      - package: Firebase
+        product: FirebaseFirestore
+      - package: Firebase
+        product: FirebaseMessaging
+      - package: GoogleSignIn
+        product: GoogleSignIn
+      - target: CampusFlowWidgetExtension
+        embed: true
+
+  CampusFlowWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: CampusFlowWidget
+      - path: Shared
+    info:
+      path: Config/CampusFlowWidget-Info.plist
+      properties:
+        CFBundleDisplayName: 校園日程小工具
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        APP_GROUP_ID: $(APP_GROUP_ID)
+    entitlements:
+      path: Config/CampusFlowWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(APP_GROUP_ID)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.jimmy980821.campusflow.widget
+        SKIP_INSTALL: YES
+        APPLICATION_EXTENSION_API_ONLY: YES

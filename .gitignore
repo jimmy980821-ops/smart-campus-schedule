@@ -1,0 +1,8 @@
+# iOS 本機設定與 Xcode 產物
+ios/Config/GoogleService-Info.plist
+ios/CampusFlow.xcodeproj/
+ios/*.xcworkspace/
+ios/DerivedData/
+ios/**/xcuserdata/
+*.xcuserstate
+.DS_Store

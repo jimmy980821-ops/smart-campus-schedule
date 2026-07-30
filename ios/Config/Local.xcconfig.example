@@ -1,0 +1,4 @@
+// 將 Firebase 控制台 iOS App 的 REVERSED_CLIENT_ID 貼在這裡。
+// 例如：com.googleusercontent.apps.123456789-abcdef
+GOOGLE_REVERSED_CLIENT_ID = REPLACE_WITH_REVERSED_CLIENT_ID
+
