@@ -51,6 +51,31 @@ Google 身分、登出與通知權限會透過安全的原生橋接交給 iOS Ap
 12. CampusFlow target 需有 Push Notifications；Background Modes 勾選 Remote notifications。
 13. 連接 iPhone，選擇實機後執行。
 
+## 免費安裝到自己的 iPhone
+
+未加入 Apple Developer Program 時，可使用 Xcode 的 Personal Team 安裝到自己的
+iPhone。免費簽署不支援 APNs 與 App Groups，因此這個模式會保留 App、Google
+登入及網站資料同步，但停用原生背景推播與 Widget 共用資料。
+
+先在 Xcode 登入 Apple ID 並選過 Personal Team，再執行：
+
+```bash
+cd ~/Desktop/CampusFlow/ios
+bash scripts/configure-personal-device.sh
+open CampusFlow.xcodeproj
+```
+
+接著在 `CampusFlow` 與 `CampusFlowWidgetExtension` 的 Signing & Capabilities
+選擇相同的 Personal Team，選取實體 iPhone 後執行。免費 provisioning profile
+有效期為 7 天，過期後需重新連接 Mac 並再次建置安裝。
+
+若要恢復正式推播與 Widget App Group，執行：
+
+```bash
+cd ~/Desktop/CampusFlow/ios
+bash scripts/configure-firebase.sh
+```
+
 ## Firebase 資料位置
 
 - 課表：`users/{uid}/settings/schedule`
