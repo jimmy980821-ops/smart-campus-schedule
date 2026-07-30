@@ -6,6 +6,13 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
+struct NativeWebCredential: Equatable {
+    let uid: String
+    let idToken: String
+    let accessToken: String
+    let deviceID: String
+}
+
 @MainActor
 final class CampusFlowModel: ObservableObject {
     @Published private(set) var user: User?
@@ -13,6 +20,7 @@ final class CampusFlowModel: ObservableObject {
     @Published private(set) var assignments: [AssignmentItem] = []
     @Published private(set) var exams: [ExamItem] = []
     @Published private(set) var isLoading = false
+    @Published private(set) var webCredential: NativeWebCredential?
     @Published var errorMessage: String?
 
     private var authHandle: AuthStateDidChangeListenerHandle?
@@ -36,9 +44,11 @@ final class CampusFlowModel: ObservableObject {
                 self.user = user
                 self.stopListeners()
                 if let user {
+                    self.restoreGoogleSessionForWeb(uid: user.uid)
                     self.startListeners(uid: user.uid)
                     await PushNotificationManager.shared.refreshDeviceRegistration(uid: user.uid)
                 } else {
+                    self.webCredential = nil
                     self.clearData()
                 }
             }
@@ -48,6 +58,10 @@ final class CampusFlowModel: ObservableObject {
     func signInWithGoogle() async {
         guard isFirebaseReady else {
             errorMessage = "請先加入 Firebase 的 GoogleService-Info.plist。"
+            return
+        }
+        guard let clientID = Self.googleClientID else {
+            errorMessage = "Firebase 設定檔缺少 Google Client ID，請在 Firebase 重新下載 GoogleService-Info.plist。"
             return
         }
         guard let root = UIApplication.shared.connectedScenes
@@ -61,6 +75,8 @@ final class CampusFlowModel: ObservableObject {
         isLoading = true
         defer { isLoading = false }
         do {
+            // 每次登入前設定一次，避免 App 啟動順序造成 Google Sign-In 尚未初始化。
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
             let result = try await GIDSignIn.sharedInstance.signIn(withPresenting: root)
             guard let idToken = result.user.idToken?.tokenString else {
                 throw CampusFlowError.missingGoogleToken
@@ -69,30 +85,78 @@ final class CampusFlowModel: ObservableObject {
                 withIDToken: idToken,
                 accessToken: result.user.accessToken.tokenString
             )
-            _ = try await Auth.auth().signIn(with: credential)
+            let authResult = try await Auth.auth().signIn(with: credential)
+            webCredential = NativeWebCredential(
+                uid: authResult.user.uid,
+                idToken: idToken,
+                accessToken: result.user.accessToken.tokenString,
+                deviceID: PushNotificationManager.shared.nativeDeviceID(uid: authResult.user.uid)
+            )
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    private static var googleClientID: String? {
+        if let clientID = FirebaseApp.app()?.options.clientID, !clientID.isEmpty {
+            return clientID
+        }
+        guard let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
+              let serviceInfo = NSDictionary(contentsOfFile: path),
+              let clientID = serviceInfo["CLIENT_ID"] as? String,
+              !clientID.isEmpty
+        else {
+            return nil
+        }
+        return clientID
+    }
+
+    private func restoreGoogleSessionForWeb(uid: String) {
+        guard webCredential == nil, GIDSignIn.sharedInstance.hasPreviousSignIn() else { return }
+
+        GIDSignIn.sharedInstance.restorePreviousSignIn { [weak self] user, _ in
+            guard let user,
+                  let idToken = user.idToken?.tokenString
+            else {
+                return
+            }
+            Task { @MainActor in
+                self?.webCredential = NativeWebCredential(
+                    uid: uid,
+                    idToken: idToken,
+                    accessToken: user.accessToken.tokenString,
+                    deviceID: PushNotificationManager.shared.nativeDeviceID(uid: uid)
+                )
+            }
         }
     }
 
     func signOut() {
         PushNotificationManager.shared.markOffline()
+        webCredential = nil
         try? Auth.auth().signOut()
         GIDSignIn.sharedInstance.signOut()
     }
 
-    func requestNotifications() async {
+    func requestNotifications() async -> Bool {
         guard let uid = user?.uid else {
             errorMessage = "請先登入 Google 帳號。"
-            return
+            return false
         }
         do {
             try await PushNotificationManager.shared.requestPermission(uid: uid)
             errorMessage = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
+    }
+
+    func updateDevicePresence(isOnline: Bool) async {
+        guard let uid = user?.uid else { return }
+        await PushNotificationManager.shared.updatePresence(uid: uid, online: isOnline)
     }
 
     private func startListeners(uid: String) {
@@ -226,13 +290,7 @@ private extension CampusFlowModel {
         now: Date = Date()
     ) -> WidgetSnapshot {
         let calendar = CampusFlowDate.calendar
-        let appleWeekday = calendar.component(.weekday, from: now)
-        let weekday = appleWeekday == 1 ? 7 : appleWeekday - 1
-        let todayCourses = courses.filter { $0.weekday == weekday }.sorted { $0.period < $1.period }
-        let nextCourse = todayCourses.first {
-            guard let start = CampusFlowDate.startTime(for: $0, on: now) else { return false }
-            return start > now
-        }
+        let courseState = CampusFlowSchedule.state(at: now, courses: courses)
         let nearestAssignment = assignments
             .filter { !$0.completed && ($0.due ?? .distantPast) >= calendar.startOfDay(for: now) }
             .sorted { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) }
@@ -244,9 +302,11 @@ private extension CampusFlowModel {
 
         return WidgetSnapshot(
             updatedAt: now,
-            nextCourse: nextCourse,
-            nextCourseStart: nextCourse.flatMap { CampusFlowDate.startTime(for: $0, on: now) },
-            todayCourses: todayCourses,
+            currentCourse: courseState.currentCourse,
+            currentCourseEnd: courseState.currentCourseEnd,
+            nextCourse: courseState.nextCourse,
+            nextCourseStart: courseState.nextCourseStart,
+            todayCourses: courseState.todayCourses,
             nearestAssignment: nearestAssignment,
             gsat: gsat,
             gsatDays: gsat?.examDate.map { CampusFlowDate.days(from: now, to: $0) }
@@ -264,4 +324,3 @@ enum CampusFlowError: LocalizedError {
         }
     }
 }
-

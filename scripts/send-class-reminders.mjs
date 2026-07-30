@@ -176,7 +176,8 @@ async function listPushDevices(token) {
     for (const document of data.documents || []) {
       const pushToken = document.fields?.token?.stringValue;
       const uid = document.fields?.uid?.stringValue;
-      if (pushToken) {
+      const notificationsEnabled = document.fields?.notificationsEnabled?.booleanValue !== false;
+      if (pushToken && notificationsEnabled) {
         devices.push({
           id: document.name.split("/").pop(),
           token: pushToken,

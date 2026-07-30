@@ -1,14 +1,16 @@
 # Campus Flow iOS 與 Widget
 
-這個資料夾是現有 Campus Flow 網站的原生 iPhone／iPad 伴隨 App。它沿用同一個 Firebase 專案與資料格式，不會取代網站。
+這個資料夾是現有 Campus Flow 網站的原生 iPhone／iPad App。它沿用同一個 Firebase 專案與資料格式，登入後會直接呈現完整網站介面。
+
+Google 身分、登出與通知權限會透過安全的原生橋接交給 iOS App 處理；Widget 與背景推播仍由原生 Firebase SDK 負責。
 
 ## 已包含
 
-- SwiftUI 原生首頁
+- SwiftUI 原生登入與完整網站混合式首頁
 - Firebase Google 登入
 - Firestore 課表、作業、考試即時同步
 - Firebase Cloud Messaging 原生裝置註冊
-- iPhone／iPad 裝置名稱辨識
+- iPhone／iPad 裝置名稱、App 版本、在線狀態辨識
 - App Groups 共用 Widget 資料
 - iPhone 主畫面小型、中型 Widget
 - iPhone 鎖定畫面行內、圓形、長方形 Widget
@@ -16,7 +18,8 @@
 
 ## 在 Mac 上第一次建立
 
-1. 安裝最新版 Xcode。
+1. 建議安裝最新版 Xcode。若使用 2017 MacBook Pro／macOS Ventura，
+   專案也已鎖定相容的 Xcode 15.2、Firebase 10.29.0 與 Google Sign-In 7.1.0。
 2. 安裝 XcodeGen：
 
    ```bash
@@ -26,15 +29,16 @@
 3. 到 Firebase 控制台的 `campus-flow-9965c` 專案新增 iOS App。
 4. Bundle ID 填入 `com.jimmy980821.campusflow`。
 5. 下載 `GoogleService-Info.plist`，放到 `ios/Config/GoogleService-Info.plist`。
-6. 開啟該 plist，複製 `REVERSED_CLIENT_ID`，取代 `ios/project.yml` 中的：
+6. 執行自動設定腳本，讀取 `REVERSED_CLIENT_ID` 並重新產生專案：
 
-   ```yaml
-   GOOGLE_REVERSED_CLIENT_ID: REPLACE_WITH_REVERSED_CLIENT_ID
+   ```bash
+   cd ios
+   bash scripts/configure-firebase.sh
    ```
 
 7. 在 Firebase Authentication 確認 Google 登入已啟用。
 8. 在 Firebase 專案設定的 Cloud Messaging 上傳 APNs Authentication Key。
-9. 進入本資料夾並產生 Xcode 專案：
+9. 若之後有修改 `project.yml`，可再次產生 Xcode 專案：
 
    ```bash
    cd ios
@@ -47,12 +51,39 @@
 12. CampusFlow target 需有 Push Notifications；Background Modes 勾選 Remote notifications。
 13. 連接 iPhone，選擇實機後執行。
 
+## 免費安裝到自己的 iPhone
+
+未加入 Apple Developer Program 時，可使用 Xcode 的 Personal Team 安裝到自己的
+iPhone。免費簽署不支援 APNs 與 App Groups，因此這個模式會保留 App、Google
+登入、網站資料同步與原生 App 裝置登記，但停用原生背景推播與 Widget 共用資料。
+Widget 會改用 `Shared/CampusFlowModels.swift` 內建的固定課表與學測日期。
+
+先在 Xcode 登入 Apple ID 並選過 Personal Team，再執行：
+
+```bash
+cd ~/Desktop/CampusFlow/ios
+bash scripts/configure-personal-device.sh
+open CampusFlow.xcodeproj
+```
+
+接著在 `CampusFlow` 與 `CampusFlowWidgetExtension` 的 Signing & Capabilities
+選擇相同的 Personal Team，選取實體 iPhone 後執行。免費 provisioning profile
+有效期為 7 天，過期後需重新連接 Mac 並再次建置安裝。
+
+若要恢復正式推播與 Widget App Group，執行：
+
+```bash
+cd ~/Desktop/CampusFlow/ios
+bash scripts/configure-firebase.sh
+```
+
 ## Firebase 資料位置
 
 - 課表：`users/{uid}/settings/schedule`
 - 作業：`users/{uid}/assignments/{assignmentId}`
 - 考試：`users/{uid}/exams/{examId}`
-- 推播裝置：`pushDevices/{sha256(fcmToken)}`
+- 網站推播裝置：`pushDevices/{sha256(fcmToken)}`
+- 原生 App 裝置：`pushDevices/native-{sha256(uid + installId)}`
 
 App 會將小工具需要的精簡資料寫入：
 
