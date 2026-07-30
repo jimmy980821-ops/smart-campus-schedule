@@ -28,9 +28,35 @@ enum WidgetStore {
             let data = defaults.data(forKey: snapshotKey),
             let snapshot = try? JSONDecoder().decode(WidgetSnapshot.self, from: data)
         else {
-            return addingGsatFallback(to: .empty)
+            return addingGsatFallback(to: addingScheduleFallback(to: .empty))
         }
-        return addingGsatFallback(to: snapshot)
+        return addingGsatFallback(to: addingScheduleFallback(to: snapshot))
+    }
+
+    private static func addingScheduleFallback(
+        to snapshot: WidgetSnapshot,
+        now: Date = Date()
+    ) -> WidgetSnapshot {
+        guard
+            snapshot.todayCourses.isEmpty,
+            snapshot.currentCourse == nil,
+            snapshot.nextCourse == nil
+        else {
+            return snapshot
+        }
+
+        let state = CampusFlowSchedule.state(at: now)
+        return WidgetSnapshot(
+            updatedAt: snapshot.updatedAt == .distantPast ? now : snapshot.updatedAt,
+            currentCourse: state.currentCourse,
+            currentCourseEnd: state.currentCourseEnd,
+            nextCourse: state.nextCourse,
+            nextCourseStart: state.nextCourseStart,
+            todayCourses: state.todayCourses,
+            nearestAssignment: snapshot.nearestAssignment,
+            gsat: snapshot.gsat,
+            gsatDays: snapshot.gsatDays
+        )
     }
 
     private static func addingGsatFallback(to snapshot: WidgetSnapshot) -> WidgetSnapshot {
@@ -47,6 +73,8 @@ enum WidgetStore {
 
         return WidgetSnapshot(
             updatedAt: snapshot.updatedAt,
+            currentCourse: snapshot.currentCourse,
+            currentCourseEnd: snapshot.currentCourseEnd,
             nextCourse: snapshot.nextCourse,
             nextCourseStart: snapshot.nextCourseStart,
             todayCourses: snapshot.todayCourses,

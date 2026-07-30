@@ -282,13 +282,7 @@ private extension CampusFlowModel {
         now: Date = Date()
     ) -> WidgetSnapshot {
         let calendar = CampusFlowDate.calendar
-        let appleWeekday = calendar.component(.weekday, from: now)
-        let weekday = appleWeekday == 1 ? 7 : appleWeekday - 1
-        let todayCourses = courses.filter { $0.weekday == weekday }.sorted { $0.period < $1.period }
-        let nextCourse = todayCourses.first {
-            guard let start = CampusFlowDate.startTime(for: $0, on: now) else { return false }
-            return start > now
-        }
+        let courseState = CampusFlowSchedule.state(at: now, courses: courses)
         let nearestAssignment = assignments
             .filter { !$0.completed && ($0.due ?? .distantPast) >= calendar.startOfDay(for: now) }
             .sorted { ($0.due ?? .distantFuture) < ($1.due ?? .distantFuture) }
@@ -300,9 +294,11 @@ private extension CampusFlowModel {
 
         return WidgetSnapshot(
             updatedAt: now,
-            nextCourse: nextCourse,
-            nextCourseStart: nextCourse.flatMap { CampusFlowDate.startTime(for: $0, on: now) },
-            todayCourses: todayCourses,
+            currentCourse: courseState.currentCourse,
+            currentCourseEnd: courseState.currentCourseEnd,
+            nextCourse: courseState.nextCourse,
+            nextCourseStart: courseState.nextCourseStart,
+            todayCourses: courseState.todayCourses,
             nearestAssignment: nearestAssignment,
             gsat: gsat,
             gsatDays: gsat?.examDate.map { CampusFlowDate.days(from: now, to: $0) }
