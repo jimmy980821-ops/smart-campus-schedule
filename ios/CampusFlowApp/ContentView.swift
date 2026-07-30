@@ -50,8 +50,16 @@ struct ContentView: View {
             Button {
                 Task { await model.signInWithGoogle() }
             } label: {
-                Label("使用 Google 帳號登入", systemImage: "person.crop.circle.badge.checkmark")
-                    .frame(maxWidth: .infinity)
+                HStack {
+                    if model.isLoading {
+                        ProgressView()
+                            .tint(.white)
+                    } else {
+                        Image(systemName: "person.crop.circle.badge.checkmark")
+                    }
+                    Text(model.isLoading ? "正在開啟 Google 登入…" : "使用 Google 帳號登入")
+                }
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
@@ -167,4 +175,3 @@ struct ContentView: View {
 #Preview {
     ContentView().environmentObject(CampusFlowModel())
 }
-
