@@ -13,7 +13,8 @@ const required = [
   "Shared/CampusFlowModels.swift",
   "Shared/WidgetStore.swift",
   "Config/CampusFlow.entitlements",
-  "Config/CampusFlowWidget.entitlements"
+  "Config/CampusFlowWidget.entitlements",
+  "scripts/configure-firebase.sh"
 ];
 
 const missing = required.filter((file) => !existsSync(join(root, file)));
