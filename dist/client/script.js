@@ -53,10 +53,12 @@ const periodTimes = [
   { period: 3, start: "10:10", end: "11:00" },
   { period: 4, start: "11:10", end: "12:00" },
   { period: 5, start: "13:10", end: "14:00" },
-  { period: 6, start: "14:20", end: "15:10" }
+  { period: 6, start: "14:05", end: "14:55" },
+  { period: 7, start: "15:15", end: "16:05" },
+  { period: 8, start: "16:10", end: "17:00" }
 ];
 
-const defaultWeeklySchedule = {
+const legacyWeeklySchedule = {
   1: [
     { period: 1, subject: "導師時間", room: "305 教室", teacher: "趙晉鴻" },
     { period: 2, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" },
@@ -99,7 +101,80 @@ const defaultWeeklySchedule = {
   ]
 };
 
+// 115 學年度第一學期正式課表（班級 305）
+const defaultWeeklySchedule = {
+  1: [
+    { period: 1, subject: "選修物理－電磁現象一", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 2, subject: "體育", room: "體育場", teacher: "李壯展" },
+    { period: 3, subject: "音樂", room: "音樂教室", teacher: "程致杉" },
+    { period: 4, subject: "國語文", room: "305 教室", teacher: "張育愷" },
+    { period: 5, subject: "數學甲", room: "305 教室", teacher: "李俊錦" },
+    { period: 6, subject: "領域課程：機器人專題", room: "專題教室", teacher: "黃建界" },
+    { period: 7, subject: "英語文", room: "305 教室", teacher: "鄭慧真" },
+    { period: 8, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真" }
+  ],
+  2: [
+    { period: 1, subject: "選修化學－化學反應與平衡", room: "305 教室", teacher: "余璧婷" },
+    { period: 2, subject: "英文作文", room: "305 教室", teacher: "鄭慧真" },
+    { period: 3, subject: "選修物理－波動、光及聲音", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 4, subject: "英語文", room: "305 教室", teacher: "鄭慧真" },
+    { period: 5, subject: "彈性學習時間", room: "分組教室", teacher: "趙晉鴻／余璧婷" },
+    { period: 6, subject: "國語文", room: "305 教室", teacher: "張育愷" },
+    { period: 7, subject: "國語文", room: "305 教室", teacher: "張育愷" },
+    { period: 8, subject: "數學輔導", room: "305 教室", teacher: "李俊錦" }
+  ],
+  3: [
+    { period: 1, subject: "選修物理－波動、光及聲音", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 2, subject: "選修化學－化學反應與平衡", room: "305 教室", teacher: "余璧婷" },
+    { period: 3, subject: "數學甲", room: "305 教室", teacher: "李俊錦" },
+    { period: 4, subject: "美術", room: "美術教室", teacher: "涂綵澄" },
+    { period: 5, subject: "加深加廣選修", room: "選修教室", teacher: "依選修課程" },
+    { period: 6, subject: "加深加廣選修", room: "選修教室", teacher: "依選修課程" },
+    { period: 7, subject: "語文表達與傳播應用", room: "305 教室", teacher: "張育愷" },
+    { period: 8, subject: "生物輔導", room: "305 教室", teacher: "蔣婉霓" }
+  ],
+  4: [
+    { period: 1, subject: "英文作文", room: "305 教室", teacher: "鄭慧真" },
+    { period: 2, subject: "選修地球科學－大氣、海洋及天文", room: "305 教室", teacher: "朱則華" },
+    { period: 3, subject: "體育", room: "體育場", teacher: "李壯展" },
+    { period: 4, subject: "國語文", room: "305 教室", teacher: "張育愷" },
+    { period: 5, subject: "全民國防教育", room: "305 教室", teacher: "蕭岳晉" },
+    { period: 6, subject: "數學甲", room: "305 教室", teacher: "李俊錦" },
+    { period: 7, subject: "藝術生活", room: "美術教室", teacher: "涂綵澄" },
+    { period: 8, subject: "化學輔導", room: "305 教室", teacher: "余璧婷" }
+  ],
+  5: [
+    { period: 1, subject: "彈性學習時間", room: "305 教室", teacher: "李俊錦" },
+    { period: 2, subject: "彈性學習時間", room: "305 教室", teacher: "鄭慧真" },
+    { period: 3, subject: "選修化學－有機化學與應用科技", room: "305 教室", teacher: "余璧婷" },
+    { period: 4, subject: "數學甲", room: "305 教室", teacher: "李俊錦" },
+    { period: 5, subject: "選修地球科學－大氣、海洋及天文", room: "305 教室", teacher: "朱則華" },
+    { period: 6, subject: "團體活動時間", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 7, subject: "團體活動時間", room: "305 教室", teacher: "趙晉鴻" },
+    { period: 8, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻" }
+  ]
+};
+
+const SCHEDULE_TEMPLATE_VERSION = "115-1-2026-08-31";
+
 const subjectColors = {
+  "選修物理－電磁現象一": "#dfeeea",
+  "選修物理－波動、光及聲音": "#dfeeea",
+  "選修化學－化學反應與平衡": "#eee3f5",
+  "選修化學－有機化學與應用科技": "#eee3f5",
+  "選修地球科學－大氣、海洋及天文": "#f6ecd8",
+  "國語文": "#f8e3dc",
+  "英語文": "#e1effc",
+  "英文作文": "#e1effc",
+  "數學甲": "#e5e9fb",
+  "體育": "#e4f0df",
+  "音樂": "#f7e6ef",
+  "美術": "#f7e6ef",
+  "藝術生活": "#f7e6ef",
+  "全民國防教育": "#e9e6dc",
+  "彈性學習時間": "#ece9f8",
+  "團體活動時間": "#ece9f8",
+  "加深加廣選修": "#e7eef1",
   導師時間: "#ece9f8",
   國文輔導: "#f9e8df",
   國文寫作: "#f7e3dc",
@@ -118,6 +193,7 @@ const STORAGE_KEYS = {
   assignments: "campusFlowAssignments",
   exams: "campusFlowExams",
   schedule: "campusFlowWeeklySchedule",
+  scheduleVersion: "campusFlowScheduleVersion",
   theme: "campusFlowTheme"
 };
 
@@ -134,7 +210,9 @@ const deviceDateTimeFormatter = new Intl.DateTimeFormat("zh-TW", {
   minute: "2-digit"
 });
 
-let weeklySchedule = normalizeSchedule(loadStorage(STORAGE_KEYS.schedule, createEmptySchedule()));
+let weeklySchedule = loadStorage(STORAGE_KEYS.scheduleVersion, "") === SCHEDULE_TEMPLATE_VERSION
+  ? normalizeSchedule(loadStorage(STORAGE_KEYS.schedule, createEmptySchedule()))
+  : normalizeSchedule(defaultWeeklySchedule);
 let assignments = removeExpiredCompletedAssignments(loadStorage(STORAGE_KEYS.assignments, createDefaultAssignments()));
 let exams = loadStorage(STORAGE_KEYS.exams, createDefaultExams());
 let pushDevices = [];
@@ -205,6 +283,7 @@ document.addEventListener("DOMContentLoaded", init);
 function init() {
   initializeTheme();
   saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+  saveStorage(STORAGE_KEYS.scheduleVersion, SCHEDULE_TEMPLATE_VERSION);
   saveStorage(STORAGE_KEYS.assignments, assignments);
   populateSubjectOptions();
   renderSchedule();
@@ -414,8 +493,15 @@ async function migrateLocalDataToCloud(userId) {
 async function uploadLocalScheduleWhenCloudIsEmpty(userId) {
   const scheduleDocument = doc(database, "users", userId, "settings", "schedule");
   const snapshot = await getDoc(scheduleDocument);
-  if (!snapshot.exists()) {
-    await setDoc(scheduleDocument, { days: weeklySchedule, updatedAt: Date.now() });
+  if (!snapshot.exists() || snapshot.data().templateVersion !== SCHEDULE_TEMPLATE_VERSION) {
+    weeklySchedule = normalizeSchedule(defaultWeeklySchedule);
+    saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+    saveStorage(STORAGE_KEYS.scheduleVersion, SCHEDULE_TEMPLATE_VERSION);
+    await setDoc(scheduleDocument, {
+      days: weeklySchedule,
+      templateVersion: SCHEDULE_TEMPLATE_VERSION,
+      updatedAt: Date.now()
+    });
   }
 }
 
@@ -479,6 +565,7 @@ function startCloudListeners(userId) {
         if (!snapshot.exists()) return;
         weeklySchedule = normalizeSchedule(snapshot.data().days);
         saveStorage(STORAGE_KEYS.schedule, weeklySchedule);
+        saveStorage(STORAGE_KEYS.scheduleVersion, SCHEDULE_TEMPLATE_VERSION);
         populateSubjectOptions();
         updateLiveCourseState();
       },
@@ -518,7 +605,7 @@ async function syncSchedule() {
   try {
     await setDoc(
       doc(database, "users", currentUser.uid, "settings", "schedule"),
-      { days: weeklySchedule, updatedAt: Date.now() }
+      { days: weeklySchedule, templateVersion: SCHEDULE_TEMPLATE_VERSION, updatedAt: Date.now() }
     );
   } catch (error) {
     handleCloudError(error);
