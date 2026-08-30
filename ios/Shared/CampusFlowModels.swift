@@ -106,7 +106,9 @@ enum CampusFlowDate {
         3: "10:10",
         4: "11:10",
         5: "13:10",
-        6: "14:20"
+        6: "14:05",
+        7: "15:15",
+        8: "16:10"
     ]
 
     static let periodEndTimes: [Int: String] = [
@@ -115,7 +117,9 @@ enum CampusFlowDate {
         3: "11:00",
         4: "12:00",
         5: "14:00",
-        6: "15:10"
+        6: "14:55",
+        7: "16:05",
+        8: "17:00"
     ]
 }
 
@@ -129,7 +133,7 @@ enum CampusFlowSchedule {
     }
 
     // 固定暑輔課表。免費 Personal Team 小工具可離線讀取，不依賴 App Groups。
-    static let fixedCourses: [Course] = [
+    static let legacyFixedCourses: [Course] = [
         Course(weekday: 1, period: 1, subject: "導師時間", room: "305 教室", teacher: "趙晉鴻"),
         Course(weekday: 1, period: 2, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真"),
         Course(weekday: 1, period: 3, subject: "化學輔導", room: "305 教室", teacher: "余璧婷"),
@@ -164,6 +168,54 @@ enum CampusFlowSchedule {
         Course(weekday: 5, period: 4, subject: "地球科學輔導", room: "305 教室", teacher: "朱則華"),
         Course(weekday: 5, period: 5, subject: "化學輔導", room: "305 教室", teacher: "余璧婷"),
         Course(weekday: 5, period: 6, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻")
+    ]
+
+    // 115 學年度第一學期正式課表；免費 Personal Team 小工具離線時也能讀取。
+    static let fixedCourses: [Course] = [
+        Course(weekday: 1, period: 1, subject: "選修物理－電磁現象一", room: "305 教室", teacher: "趙晉鴻"),
+        Course(weekday: 1, period: 2, subject: "體育", room: "體育場", teacher: "李壯展"),
+        Course(weekday: 1, period: 3, subject: "音樂", room: "音樂教室", teacher: "程致杉"),
+        Course(weekday: 1, period: 4, subject: "國語文", room: "305 教室", teacher: "張育愷"),
+        Course(weekday: 1, period: 5, subject: "數學甲", room: "305 教室", teacher: "李俊錦"),
+        Course(weekday: 1, period: 6, subject: "領域課程：機器人專題", room: "專題教室", teacher: "黃建界"),
+        Course(weekday: 1, period: 7, subject: "英語文", room: "305 教室", teacher: "鄭慧真"),
+        Course(weekday: 1, period: 8, subject: "英文輔導", room: "305 教室", teacher: "鄭慧真"),
+
+        Course(weekday: 2, period: 1, subject: "選修化學－化學反應與平衡", room: "305 教室", teacher: "余璧婷"),
+        Course(weekday: 2, period: 2, subject: "英文作文", room: "305 教室", teacher: "鄭慧真"),
+        Course(weekday: 2, period: 3, subject: "選修物理－波動、光及聲音", room: "305 教室", teacher: "趙晉鴻"),
+        Course(weekday: 2, period: 4, subject: "英語文", room: "305 教室", teacher: "鄭慧真"),
+        Course(weekday: 2, period: 5, subject: "彈性學習時間", room: "分組教室", teacher: "趙晉鴻／余璧婷"),
+        Course(weekday: 2, period: 6, subject: "國語文", room: "305 教室", teacher: "張育愷"),
+        Course(weekday: 2, period: 7, subject: "國語文", room: "305 教室", teacher: "張育愷"),
+        Course(weekday: 2, period: 8, subject: "數學輔導", room: "305 教室", teacher: "李俊錦"),
+
+        Course(weekday: 3, period: 1, subject: "選修物理－波動、光及聲音", room: "305 教室", teacher: "趙晉鴻"),
+        Course(weekday: 3, period: 2, subject: "選修化學－化學反應與平衡", room: "305 教室", teacher: "余璧婷"),
+        Course(weekday: 3, period: 3, subject: "數學甲", room: "305 教室", teacher: "李俊錦"),
+        Course(weekday: 3, period: 4, subject: "美術", room: "美術教室", teacher: "涂綵澄"),
+        Course(weekday: 3, period: 5, subject: "加深加廣選修", room: "選修教室", teacher: "依選修課程"),
+        Course(weekday: 3, period: 6, subject: "加深加廣選修", room: "選修教室", teacher: "依選修課程"),
+        Course(weekday: 3, period: 7, subject: "語文表達與傳播應用", room: "305 教室", teacher: "張育愷"),
+        Course(weekday: 3, period: 8, subject: "生物輔導", room: "305 教室", teacher: "蔣婉霓"),
+
+        Course(weekday: 4, period: 1, subject: "英文作文", room: "305 教室", teacher: "鄭慧真"),
+        Course(weekday: 4, period: 2, subject: "選修地球科學－大氣、海洋及天文", room: "305 教室", teacher: "朱則華"),
+        Course(weekday: 4, period: 3, subject: "體育", room: "體育場", teacher: "李壯展"),
+        Course(weekday: 4, period: 4, subject: "國語文", room: "305 教室", teacher: "張育愷"),
+        Course(weekday: 4, period: 5, subject: "全民國防教育", room: "305 教室", teacher: "蕭岳晉"),
+        Course(weekday: 4, period: 6, subject: "數學甲", room: "305 教室", teacher: "李俊錦"),
+        Course(weekday: 4, period: 7, subject: "藝術生活", room: "美術教室", teacher: "涂綵澄"),
+        Course(weekday: 4, period: 8, subject: "化學輔導", room: "305 教室", teacher: "余璧婷"),
+
+        Course(weekday: 5, period: 1, subject: "彈性學習時間", room: "305 教室", teacher: "李俊錦"),
+        Course(weekday: 5, period: 2, subject: "彈性學習時間", room: "305 教室", teacher: "鄭慧真"),
+        Course(weekday: 5, period: 3, subject: "選修化學－有機化學與應用科技", room: "305 教室", teacher: "余璧婷"),
+        Course(weekday: 5, period: 4, subject: "數學甲", room: "305 教室", teacher: "李俊錦"),
+        Course(weekday: 5, period: 5, subject: "選修地球科學－大氣、海洋及天文", room: "305 教室", teacher: "朱則華"),
+        Course(weekday: 5, period: 6, subject: "團體活動時間", room: "305 教室", teacher: "趙晉鴻"),
+        Course(weekday: 5, period: 7, subject: "團體活動時間", room: "305 教室", teacher: "趙晉鴻"),
+        Course(weekday: 5, period: 8, subject: "物理輔導", room: "305 教室", teacher: "趙晉鴻")
     ]
 
     static func state(at now: Date = Date(), courses: [Course] = fixedCourses) -> State {
